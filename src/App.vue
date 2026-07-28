@@ -92,7 +92,12 @@ watch(configuredApis, (apis) => {
 }, { deep: true });
 
 const activeEvent = computed(() => events.find((event) => event.id === activeEventId.value) || events[0]);
-const activeStream = computed(() => getEventStream(activeEvent.value, configuredStreams.value) || configuredStreams.value[0] || videoStreams[0]);
+const activeStream = computed(() => (
+  configuredStreams.value.find((stream) => stream.id === activeStreamId.value)
+  || getEventStream(activeEvent.value, configuredStreams.value)
+  || configuredStreams.value[0]
+  || videoStreams[0]
+));
 const liveStreams = computed(() => getLiveStreams(configuredStreams.value));
 const apiGroups = computed(() => getApiGroups(configuredApis.value));
 const metrics = computed(() => getPlatformMetrics(events, configuredStreams.value, configuredApis.value));
@@ -282,6 +287,13 @@ resetApiForm();
               <h2>实时监控画面</h2>
               <span>{{ activeStream.protocol }} · {{ activeStream.resolution }} · {{ activeStream.latency }}</span>
             </div>
+            <div class="video-source-strip">
+              <div><span>当前视频源</span><b>{{ activeStream.id }} · {{ activeStream.name }}</b></div>
+              <div><span>协议 / 状态</span><b>{{ activeStream.protocol }} · {{ activeStream.enabled ? activeStream.status : 'disabled' }}</b></div>
+              <div><span>认证配置</span><b>{{ activeStream.authProfile || '未配置' }}</b></div>
+              <div class="span-2"><span>原始流地址</span><code>{{ activeStream.endpoint }}</code></div>
+              <small>RTSP 原始流已作为接入配置写入；浏览器真实播放通常需要后端转成 WebRTC / HLS / FLV。</small>
+            </div>
             <div class="live-monitor" :class="activeEvent.risk.type">
               <div class="monitor-grid"></div>
               <div class="scan-line"></div>
@@ -339,7 +351,7 @@ resetApiForm();
           <div class="panel-head"><h2>视频流状态</h2><span>来自接入配置</span></div>
           <button v-for="stream in liveStreams" :key="stream.id" class="stream-row" :class="{ active: stream.id === activeStreamId }" @click="selectStream(stream)">
             <b>{{ stream.id }}</b>
-            <span>{{ stream.name }}</span>
+            <span>{{ stream.name }} · {{ stream.protocol }}</span>
             <i :class="stream.status">{{ stream.status }}</i>
           </button>
         </section>

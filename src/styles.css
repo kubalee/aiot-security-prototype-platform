@@ -316,6 +316,43 @@ i.critical {
   margin-bottom: 16px;
 }
 
+.video-source-strip {
+  display: grid;
+  grid-template-columns: 1fr 0.8fr 0.8fr;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(5, 11, 17, 0.44);
+}
+
+.video-source-strip div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.video-source-strip span,
+.video-source-strip small {
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.video-source-strip b,
+.video-source-strip code {
+  overflow: hidden;
+  color: #e8f1f8;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.video-source-strip code {
+  color: #9fe9ff;
+}
+
+.video-source-strip small {
+  grid-column: 1 / -1;
+}
+
 .live-monitor {
   position: relative;
   height: 430px;
@@ -438,12 +475,28 @@ i.critical {
   right: 0;
   bottom: 0;
   left: 0;
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(150px, 0.9fr) minmax(240px, 1.4fr);
   gap: 12px;
+  align-items: center;
   padding: 14px 16px;
   background: rgba(5, 11, 17, 0.76);
   border-top: 1px solid rgba(255,255,255,0.1);
+}
+
+.live-monitor footer strong,
+.live-monitor footer code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.live-monitor footer strong {
+  white-space: normal;
+}
+
+.live-monitor footer code {
+  white-space: nowrap;
 }
 
 .decision-panel p,
@@ -936,7 +989,8 @@ i.critical {
   .table-row.config-row,
   .stack-row,
   .stream-row,
-  .config-form {
+  .config-form,
+  .video-source-strip {
     grid-template-columns: 1fr;
   }
 
