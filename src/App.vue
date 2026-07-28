@@ -336,7 +336,7 @@ onMounted(loadPageData);
 
     <section v-if="loading" class="panel loading-panel">正在加载 /api/dashboard.json、/api/video-streams.json、/api/api-catalog.json...</section>
 
-    <main v-if="!loading && view === 'command'" class="command-workspace nigma-workspace">
+    <main v-if="!loading && view === 'command'" class="command-workspace minimal-workspace">
       <div class="ambient-grid" aria-hidden="true"></div>
       <aside class="panel situation-panel">
         <div class="section-title">
@@ -378,7 +378,7 @@ onMounted(loadPageData);
         <div class="live-monitor">
           <StreamPlayer :stream="activeStream" />
           <div class="stage-identity">
-            <span>AI COMMAND SURFACE</span>
+            <span>实时指挥台</span>
             <h1>{{ activeEvent.title || '等待事件上报' }}</h1>
             <p>{{ activeEvent.location }} · {{ activeEvent.time }}</p>
           </div>
