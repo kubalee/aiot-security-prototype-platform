@@ -1,5 +1,6 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue';
+import StreamPlayer from './StreamPlayer.vue';
 import {
   apiCatalog,
   events,
@@ -32,8 +33,21 @@ function readStorage(key, fallback) {
   }
 }
 
+function normalizeStream(stream) {
+  const protocol = stream.protocol || 'RTSP';
+  return {
+    playProtocol: protocol === 'HLS' ? 'hls' : protocol === 'FLV' ? 'flv' : protocol === 'WebRTC' ? 'webrtc' : 'hls',
+    playUrl: protocol === 'HLS' || protocol === 'WebRTC' ? stream.endpoint : '',
+    ...stream,
+  };
+}
+
+function maskUrl(url = '') {
+  return url.replace(/:\/\/([^:@/\s]+):([^@/\s]+)@/u, '://$1:******@');
+}
+
 function readConfiguredStreams() {
-  const streams = readStorage(storageKeys.streams, videoStreams);
+  const streams = readStorage(storageKeys.streams, videoStreams).map(normalizeStream);
   const primaryStream = videoStreams.find((stream) => stream.id === 'CAM-A01');
   if (!primaryStream) return streams;
 
@@ -65,6 +79,8 @@ const streamForm = reactive({
   zone: '',
   protocol: 'RTSP',
   endpoint: '',
+  playProtocol: 'hls',
+  playUrl: '',
   status: 'online',
   priority: 1,
   enabled: true,
@@ -120,6 +136,8 @@ function resetStreamForm() {
     zone: '',
     protocol: 'RTSP',
     endpoint: '',
+    playProtocol: 'hls',
+    playUrl: '',
     status: 'online',
     priority: configuredStreams.value.length + 1,
     enabled: true,
@@ -132,7 +150,7 @@ function resetStreamForm() {
 }
 
 function editStream(stream) {
-  Object.assign(streamForm, clone(stream));
+  Object.assign(streamForm, normalizeStream(clone(stream)));
   editingStreamId.value = stream.id;
 }
 
@@ -143,6 +161,8 @@ function saveStream() {
     name: streamForm.name.trim(),
     zone: streamForm.zone.trim(),
     endpoint: streamForm.endpoint.trim(),
+    playProtocol: streamForm.playProtocol,
+    playUrl: streamForm.playUrl.trim(),
     authProfile: streamForm.authProfile.trim(),
     priority: Number(streamForm.priority) || configuredStreams.value.length + 1,
     enabled: Boolean(streamForm.enabled),
@@ -289,12 +309,14 @@ resetApiForm();
             </div>
             <div class="video-source-strip">
               <div><span>当前视频源</span><b>{{ activeStream.id }} · {{ activeStream.name }}</b></div>
-              <div><span>协议 / 状态</span><b>{{ activeStream.protocol }} · {{ activeStream.enabled ? activeStream.status : 'disabled' }}</b></div>
+              <div><span>原始协议 / 状态</span><b>{{ activeStream.protocol }} · {{ activeStream.enabled ? activeStream.status : 'disabled' }}</b></div>
+              <div><span>网页播放</span><b>{{ activeStream.playProtocol || '未配置' }}</b></div>
               <div><span>认证配置</span><b>{{ activeStream.authProfile || '未配置' }}</b></div>
-              <div class="span-2"><span>原始流地址</span><code>{{ activeStream.endpoint }}</code></div>
-              <small>RTSP 原始流已作为接入配置写入；浏览器真实播放通常需要后端转成 WebRTC / HLS / FLV。</small>
+              <div class="span-2"><span>原始流地址</span><code>{{ maskUrl(activeStream.endpoint) }}</code></div>
+              <div class="span-2"><span>网页播放地址</span><code>{{ activeStream.playUrl ? maskUrl(activeStream.playUrl) : '未配置，等待转流服务输出 HLS / FLV / MPEG-TS / WebRTC 地址' }}</code></div>
             </div>
             <div class="live-monitor" :class="activeEvent.risk.type">
+              <StreamPlayer :stream="activeStream" />
               <div class="monitor-grid"></div>
               <div class="scan-line"></div>
               <div v-for="stream in liveStreams.slice(0, 3)" :key="stream.id" class="camera-chip" :class="stream.priority === 1 ? 'top-left' : stream.priority === 2 ? 'top-right' : 'bottom-left'">{{ stream.id }}</div>
@@ -307,7 +329,7 @@ resetApiForm();
               </div>
               <footer>
                 <strong>{{ activeStream.id }} · {{ activeStream.name }}</strong>
-                <code>{{ activeStream.endpoint }}</code>
+                <code>{{ maskUrl(activeStream.endpoint) }}</code>
               </footer>
             </div>
           </section>
@@ -418,6 +440,8 @@ resetApiForm();
             <label>区域<input v-model.trim="streamForm.zone" placeholder="A区"></label>
             <label>协议<select v-model="streamForm.protocol"><option>RTSP</option><option>HLS</option><option>WebRTC</option><option>FLV</option></select></label>
             <label class="span-2">视频流地址<input v-model.trim="streamForm.endpoint" required placeholder="rtsp:// 或 https:// 或 webrtc://"></label>
+            <label>网页播放协议<select v-model="streamForm.playProtocol"><option value="hls">HLS / m3u8</option><option value="flv">HTTP-FLV</option><option value="mpegts">MPEG-TS</option><option value="webrtc">WebRTC</option><option value="native">原生 video</option></select></label>
+            <label>网页播放地址<input v-model.trim="streamForm.playUrl" placeholder="https://...m3u8 / https://...flv / ws://..."></label>
             <label>状态<select v-model="streamForm.status"><option>online</option><option>degraded</option><option>offline</option></select></label>
             <label>优先级<input v-model.number="streamForm.priority" type="number" min="1"></label>
             <label>分辨率<input v-model.trim="streamForm.resolution" placeholder="1920x1080"></label>
@@ -457,7 +481,8 @@ resetApiForm();
               <b>{{ stream.id }}</b>
               <span>{{ stream.name }}</span>
               <code>{{ stream.protocol }}</code>
-              <code>{{ stream.endpoint }}</code>
+              <code>{{ maskUrl(stream.endpoint) }}</code>
+              <code>{{ stream.playProtocol }} · {{ stream.playUrl ? maskUrl(stream.playUrl) : '未配置播放地址' }}</code>
               <i :class="stream.enabled ? stream.status : 'disabled'">{{ stream.enabled ? stream.status : 'disabled' }}</i>
               <div class="row-actions">
                 <button @click="editStream(stream)">编辑</button>
