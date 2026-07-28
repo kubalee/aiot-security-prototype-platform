@@ -96,6 +96,7 @@ const configuredStreams = ref([]);
 const configuredApis = ref([]);
 const editingStreamId = ref('');
 const editingApiId = ref('');
+const videoInfoPinned = ref(false);
 
 const streamForm = reactive({
   id: '',
@@ -268,6 +269,7 @@ function selectEvent(event) {
 
 function selectStream(stream) {
   activeStreamId.value = stream.id;
+  videoInfoPinned.value = false;
   const event = incidents.value.find((item) => item.cameraId === stream.id);
   if (event) activeEventId.value = event.id;
 }
@@ -383,12 +385,22 @@ onMounted(loadPageData);
             <p>{{ activeEvent.location }} · {{ activeEvent.time }}</p>
           </div>
           <b class="status-pill stage-status" :class="activeEvent.severity">{{ activeEvent.severityText || '待上报' }}</b>
-          <footer>
-            <div><span>视频源</span><strong>{{ activeStream.id }} · {{ activeStream.name }}</strong></div>
-            <div><span>原始流</span><code>{{ maskUrl(activeStream.endpoint) }}</code></div>
-            <div><span>播放协议</span><strong>{{ activeStream.playProtocol || '未配置' }}</strong></div>
-            <div><span>播放地址</span><code>{{ activeStream.playUrl ? maskUrl(activeStream.playUrl) : '等待 HLS / FLV / WebRTC 地址' }}</code></div>
-          </footer>
+          <div class="video-info-panel" :class="{ pinned: videoInfoPinned }">
+            <button
+              class="video-info-trigger"
+              type="button"
+              :aria-pressed="videoInfoPinned"
+              @click="videoInfoPinned = !videoInfoPinned"
+            >
+              {{ videoInfoPinned ? '收起信息' : '视频信息' }}
+            </button>
+            <div class="video-info-grid">
+              <div><span>视频源</span><strong>{{ activeStream.id }} · {{ activeStream.name }}</strong></div>
+              <div><span>原始流</span><code>{{ maskUrl(activeStream.endpoint) }}</code></div>
+              <div><span>播放协议</span><strong>{{ activeStream.playProtocol || '未配置' }}</strong></div>
+              <div><span>播放地址</span><code>{{ activeStream.playUrl ? maskUrl(activeStream.playUrl) : '等待 HLS / FLV / WebRTC 地址' }}</code></div>
+            </div>
+          </div>
         </div>
 
         <div class="stat-strip">
