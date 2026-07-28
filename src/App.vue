@@ -109,6 +109,8 @@ const editingApiId = ref('');
 const videoInfoPinned = ref(false);
 const apiMockPayload = ref({ interfaces: [], flows: [], summary: {} });
 const activeInterfaceId = ref('');
+const activityLog = ref([]);
+const analyticsFilter = ref({ type: 'all', value: '全部事件' });
 
 const streamForm = reactive({
   id: '',
@@ -195,6 +197,24 @@ const interfaceStats = computed(() => {
     { label: '智能体接口', value: items.filter((item) => item.group === 'agent').length, hint: '/agents/*' },
     { label: '调用链路', value: apiMockPayload.value.flows?.length || 0, hint: '业务流程' },
   ];
+});
+const filteredAnalyticsEvents = computed(() => {
+  if (analyticsFilter.value.type === 'severity') {
+    return incidents.value.filter((event) => event.severity === analyticsFilter.value.value);
+  }
+  if (analyticsFilter.value.type === 'stage') {
+    return incidents.value.filter((event) => event.stage === analyticsFilter.value.value);
+  }
+  if (analyticsFilter.value.type === 'processing') {
+    return incidents.value.filter((event) => event.progress < 100);
+  }
+  return incidents.value;
+});
+const analyticsPanelTitle = computed(() => {
+  if (analyticsFilter.value.type === 'severity') return `事件等级：${analyticsFilter.value.label}`;
+  if (analyticsFilter.value.type === 'stage') return `处置阶段：${analyticsFilter.value.label}`;
+  if (analyticsFilter.value.type === 'processing') return '处理中事件';
+  return '全部事件';
 });
 
 function resetStreamForm() {
@@ -309,6 +329,84 @@ function selectStream(stream) {
 
 function selectInterface(item) {
   activeInterfaceId.value = item.id;
+}
+
+function pushActivity(message) {
+  const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+  activityLog.value = [
+    { id: `${Date.now()}-${activityLog.value.length}`, time, message },
+    ...activityLog.value,
+  ].slice(0, 8);
+}
+
+function patchActiveEvent(updater) {
+  if (!activeEvent.value.id) return;
+  const nextEvent = clone(activeEvent.value);
+  updater(nextEvent);
+  incidents.value = incidents.value.map((event) => (event.id === nextEvent.id ? nextEvent : event));
+}
+
+function runRecommendation(item, index) {
+  patchActiveEvent((event) => {
+    event.stage = Math.max(event.stage || 0, Math.min(4, index + 1));
+    event.progress = Math.max(event.progress || 0, Math.min(100, 45 + (index + 1) * 12));
+    event.aiDecision = `已执行建议动作「${item}」。系统将该动作写入处置链路，并等待后端接口回传真实执行结果。`;
+  });
+  pushActivity(`执行建议动作：${item}`);
+}
+
+function advanceStage(index) {
+  patchActiveEvent((event) => {
+    event.stage = index;
+    event.progress = Math.min(100, Math.max(event.progress || 0, (index + 1) * 20));
+    if (index === stages.value.length - 1) {
+      event.progress = 100;
+      event.severity = 'normal';
+      event.severityText = '已闭环';
+    }
+  });
+  pushActivity(`切换处置阶段：${stages.value[index]}`);
+}
+
+function triggerLinkage(item) {
+  patchActiveEvent((event) => {
+    event.stage = Math.max(event.stage || 0, 3);
+    event.linkage = (event.linkage || []).map((entry) => (
+      entry.name === item.name && entry.target === item.target
+        ? { ...entry, status: 'done', label: '已执行' }
+        : entry
+    ));
+  });
+  pushActivity(`下发物联动作：${item.name} / ${item.target}`);
+}
+
+function triggerContact(item) {
+  patchActiveEvent((event) => {
+    event.contacts = (event.contacts || []).map((entry) => (
+      entry.name === item.name && entry.channel === item.channel
+        ? { ...entry, status: entry.status === 'done' ? 'done' : 'running', label: entry.status === 'done' ? '已确认' : '已通知' }
+        : entry
+    ));
+  });
+  pushActivity(`发送人员通知：${item.name} / ${item.channel}`);
+}
+
+function closeIncident() {
+  patchActiveEvent((event) => {
+    event.stage = stages.value.length - 1;
+    event.progress = 100;
+    event.severity = 'normal';
+    event.severityText = '已闭环';
+    event.linkage = (event.linkage || []).map((entry) => ({ ...entry, status: 'done', label: '已完成' }));
+    event.contacts = (event.contacts || []).map((entry) => ({ ...entry, status: 'done', label: '已确认' }));
+    event.aiDecision = '人工已确认本次处置闭环。联动、通知、审计日志均已进入后端接口模拟链路。';
+  });
+  pushActivity(`闭环事件：${activeEvent.value.id}`);
+}
+
+function setAnalyticsFilter(type, value = 'all', label = '全部事件') {
+  analyticsFilter.value = { type, value, label };
+  pushActivity(`分析筛选：${label}`);
 }
 
 function stageState(index) {
@@ -445,11 +543,17 @@ onMounted(loadPageData);
         </div>
 
         <div class="stat-strip">
-          <div v-for="item in commandStats" :key="item.label" class="metric-tile" :class="item.tone">
+          <button
+            v-for="item in commandStats"
+            :key="item.label"
+            class="metric-tile"
+            :class="item.tone"
+            @click="view = 'analytics'; setAnalyticsFilter(item.tone === 'green' ? 'stage' : 'all', item.tone === 'green' ? activeEvent.stage : 'all', item.label)"
+          >
             <span>{{ item.label }}</span>
             <strong>{{ item.value }}</strong>
             <small>{{ item.hint }}</small>
-          </div>
+          </button>
         </div>
       </section>
 
@@ -461,15 +565,16 @@ onMounted(loadPageData);
         <p class="decision-copy">{{ activeEvent.aiDecision }}</p>
 
         <div class="timeline">
-          <div v-for="(stage, index) in stages" :key="stage" :class="stageState(index)">
+          <button v-for="(stage, index) in stages" :key="stage" :class="stageState(index)" @click="advanceStage(index)">
             <b>{{ index + 1 }}</b>
             <span>{{ stage }}</span>
-          </div>
+          </button>
         </div>
 
         <div class="action-list">
           <span>建议动作</span>
-          <button v-for="item in activeEvent.recommendations || []" :key="item">{{ item }}</button>
+          <button v-for="(item, index) in activeEvent.recommendations || []" :key="item" @click="runRecommendation(item, index)">{{ item }}</button>
+          <button class="primary-action" @click="closeIncident">人工确认闭环</button>
         </div>
       </aside>
 
@@ -490,10 +595,10 @@ onMounted(loadPageData);
           <span>物联系统联动</span>
           <strong>{{ metrics.activeLinkage }}/{{ metrics.totalLinkage }}</strong>
         </div>
-        <div v-for="item in activeEvent.linkage || []" :key="`${item.name}-${item.target}`" class="table-row compact">
+        <button v-for="item in activeEvent.linkage || []" :key="`${item.name}-${item.target}`" class="table-row compact row-action" @click="triggerLinkage(item)">
           <div><strong>{{ item.name }}</strong><span>{{ item.target }}</span></div>
           <b :class="item.status">{{ item.label }}</b>
-        </div>
+        </button>
       </section>
 
       <section class="panel contact-panel">
@@ -501,9 +606,20 @@ onMounted(loadPageData);
           <span>人员通知</span>
           <strong>{{ metrics.touchedContacts }}/{{ metrics.totalContacts }}</strong>
         </div>
-        <div v-for="item in activeEvent.contacts || []" :key="`${item.name}-${item.channel}`" class="table-row compact">
+        <button v-for="item in activeEvent.contacts || []" :key="`${item.name}-${item.channel}`" class="table-row compact row-action" @click="triggerContact(item)">
           <div><strong>{{ item.name }}</strong><span>{{ item.role }} · {{ item.channel }}</span></div>
           <b :class="item.status">{{ item.label }}</b>
+        </button>
+      </section>
+
+      <section class="panel activity-panel">
+        <div class="section-title">
+          <span>交互操作日志</span>
+          <strong>{{ activityLog.length }}</strong>
+        </div>
+        <div v-if="!activityLog.length" class="empty-copy">点击建议动作、处置阶段、联动或通知后，这里会记录原型状态变化。</div>
+        <div v-for="item in activityLog" :key="item.id" class="table-row compact">
+          <div><strong>{{ item.message }}</strong><span>{{ item.time }}</span></div>
         </div>
       </section>
     </main>
@@ -516,23 +632,43 @@ onMounted(loadPageData);
       </section>
 
       <section class="analysis-grid">
-        <div class="analysis-card"><h2>事件总量</h2><strong>{{ metrics.totalEvents }}</strong><p>来自本地 JSON 或后端事件接口。</p></div>
-        <div class="analysis-card"><h2>平均置信度</h2><strong>{{ metrics.averageConfidence }}%</strong><p>按当前事件队列实时计算。</p></div>
-        <div class="analysis-card"><h2>实时视频流</h2><strong>{{ metrics.liveStreams }}</strong><p>由接入配置中的启用状态计算。</p></div>
-        <div class="analysis-card"><h2>接口准备度</h2><strong>{{ metrics.apiReserved }}</strong><p>后端接口与智能体接口总数。</p></div>
+        <button class="analysis-card analysis-action" @click="setAnalyticsFilter('all', 'all', '全部事件')"><h2>事件总量</h2><strong>{{ metrics.totalEvents }}</strong><p>点击查看全部事件。</p></button>
+        <button class="analysis-card analysis-action" @click="setAnalyticsFilter('processing', 'processing', '处理中事件')"><h2>平均置信度</h2><strong>{{ metrics.averageConfidence }}%</strong><p>点击查看处理中事件。</p></button>
+        <button class="analysis-card analysis-action" @click="view = 'command'; selectStream(activeStream)"><h2>实时视频流</h2><strong>{{ metrics.liveStreams }}</strong><p>点击回到当前视频。</p></button>
+        <button class="analysis-card analysis-action" @click="view = 'interfaces'"><h2>接口准备度</h2><strong>{{ metrics.apiReserved }}</strong><p>点击查看接口契约。</p></button>
         <div class="analysis-card wide">
           <h2>处置阶段分布</h2>
-          <div v-for="stage in stageBars" :key="stage.name" class="meter-row">
+          <button v-for="(stage, index) in stageBars" :key="stage.name" class="meter-row row-action" @click="setAnalyticsFilter('stage', index, stage.name)">
             <span>{{ stage.name }}</span>
             <div><i :style="{ width: `${Math.max(stage.count, 0.1) * 20}%` }"></i></div>
             <b>{{ stage.count }}</b>
-          </div>
+          </button>
         </div>
         <div class="analysis-card wide">
           <h2>事件等级分布</h2>
-          <div v-for="row in severityRows" :key="row.label" class="table-row compact">
+          <button v-for="row in severityRows" :key="row.label" class="table-row compact row-action" @click="setAnalyticsFilter('severity', row.tone, row.label)">
             <div><strong>{{ row.label }}</strong><span>{{ row.tone }}</span></div>
             <b>{{ row.value }}</b>
+          </button>
+        </div>
+        <div class="analysis-card wide analysis-results">
+          <h2>{{ analyticsPanelTitle }}</h2>
+          <button
+            v-for="event in filteredAnalyticsEvents"
+            :key="event.id"
+            class="table-row compact row-action"
+            @click="view = 'command'; selectEvent(event)"
+          >
+            <div><strong>{{ event.title }}</strong><span>{{ event.location }} · {{ event.time }}</span></div>
+            <b>{{ event.confidence }}%</b>
+          </button>
+          <p v-if="!filteredAnalyticsEvents.length">当前筛选条件下没有事件。</p>
+        </div>
+        <div class="analysis-card wide">
+          <h2>最近操作</h2>
+          <div v-if="!activityLog.length" class="empty-copy">在指挥页或分析页点击任意动作后，会同步到这里。</div>
+          <div v-for="item in activityLog.slice(0, 4)" :key="item.id" class="table-row compact">
+            <div><strong>{{ item.message }}</strong><span>{{ item.time }}</span></div>
           </div>
         </div>
       </section>

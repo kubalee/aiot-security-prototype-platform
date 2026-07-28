@@ -43,6 +43,12 @@ button {
   border: 0;
 }
 
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid rgba(37, 99, 235, 0.55);
+  outline-offset: 2px;
+}
+
 code {
   color: #315a7d;
   font-family: "SFMono-Regular", Consolas, monospace;
@@ -413,11 +419,21 @@ code {
 }
 
 .metric-tile {
+  cursor: pointer;
   min-height: 76px;
   padding: 11px 12px;
   border: 1px solid var(--hairline-2);
   border-radius: 8px;
   background: #ffffff;
+  text-align: left;
+}
+
+.metric-tile:hover,
+.analysis-action:hover,
+.row-action:hover,
+.action-list button:hover {
+  border-color: #b9d2f7;
+  background: #f5f9ff;
 }
 
 .metric-tile span,
@@ -684,7 +700,8 @@ code {
   border-bottom: 1px solid var(--hairline-2);
 }
 
-.timeline div {
+.timeline button {
+  cursor: pointer;
   display: grid;
   grid-template-columns: 26px 1fr;
   gap: 8px;
@@ -694,6 +711,7 @@ code {
   border-radius: 7px;
   background: #ffffff;
   padding: 7px 9px;
+  text-align: left;
 }
 
 .timeline b {
@@ -739,6 +757,7 @@ code {
 }
 
 .action-list button {
+  cursor: pointer;
   min-height: 33px;
   border: 1px solid #d4e6e3;
   border-radius: 7px;
@@ -746,6 +765,13 @@ code {
   color: #245b55;
   padding: 7px 9px;
   text-align: left;
+}
+
+.action-list .primary-action {
+  border-color: #b9d2f7;
+  background: #f5f9ff;
+  color: var(--blue);
+  font-weight: 760;
 }
 
 .signal-panel {
@@ -758,6 +784,17 @@ code {
 
 .contact-panel {
   grid-column: 3;
+}
+
+.activity-panel {
+  grid-column: 1 / -1;
+}
+
+.empty-copy {
+  padding: 12px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .meter-row {
@@ -810,6 +847,22 @@ code {
   background: #ffffff;
 }
 
+.table-row.row-action {
+  cursor: pointer;
+  width: calc(100% - 20px);
+  color: inherit;
+  text-align: left;
+}
+
+.meter-row.row-action {
+  cursor: pointer;
+  width: 100%;
+  border: 0;
+  background: #ffffff;
+  color: inherit;
+  text-align: left;
+}
+
 .table-row strong {
   color: var(--text);
   font-size: 12px;
@@ -857,6 +910,14 @@ code {
   padding: 14px;
 }
 
+.analysis-action {
+  cursor: pointer;
+  width: 100%;
+  border: 1px solid var(--hairline);
+  color: inherit;
+  text-align: left;
+}
+
 .analysis-card h2 {
   margin: 0;
   color: var(--text-2);
@@ -880,6 +941,10 @@ code {
 
 .analysis-card.wide {
   grid-column: span 2;
+}
+
+.analysis-results {
+  min-height: 220px;
 }
 
 .readiness-strip {
@@ -1316,6 +1381,10 @@ code {
 
   .contact-panel {
     order: 6;
+  }
+
+  .activity-panel {
+    order: 7;
   }
 
   .page-intro,
