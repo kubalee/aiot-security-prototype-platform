@@ -336,7 +336,8 @@ onMounted(loadPageData);
 
     <section v-if="loading" class="panel loading-panel">正在加载 /api/dashboard.json、/api/video-streams.json、/api/api-catalog.json...</section>
 
-    <main v-if="!loading && view === 'command'" class="command-workspace">
+    <main v-if="!loading && view === 'command'" class="command-workspace nigma-workspace">
+      <div class="ambient-grid" aria-hidden="true"></div>
       <aside class="panel situation-panel">
         <div class="section-title">
           <span>事件队列</span>
@@ -374,13 +375,20 @@ onMounted(loadPageData);
       </aside>
 
       <section class="panel live-stage">
-        <div class="stage-header">
-          <div>
-            <span>当前态势</span>
+        <div class="live-monitor">
+          <StreamPlayer :stream="activeStream" />
+          <div class="stage-identity">
+            <span>AI COMMAND SURFACE</span>
             <h1>{{ activeEvent.title || '等待事件上报' }}</h1>
             <p>{{ activeEvent.location }} · {{ activeEvent.time }}</p>
           </div>
-          <b class="status-pill" :class="activeEvent.severity">{{ activeEvent.severityText || '待上报' }}</b>
+          <b class="status-pill stage-status" :class="activeEvent.severity">{{ activeEvent.severityText || '待上报' }}</b>
+          <footer>
+            <div><span>视频源</span><strong>{{ activeStream.id }} · {{ activeStream.name }}</strong></div>
+            <div><span>原始流</span><code>{{ maskUrl(activeStream.endpoint) }}</code></div>
+            <div><span>播放协议</span><strong>{{ activeStream.playProtocol || '未配置' }}</strong></div>
+            <div><span>播放地址</span><code>{{ activeStream.playUrl ? maskUrl(activeStream.playUrl) : '等待 HLS / FLV / WebRTC 地址' }}</code></div>
+          </footer>
         </div>
 
         <div class="stat-strip">
@@ -389,16 +397,6 @@ onMounted(loadPageData);
             <strong>{{ item.value }}</strong>
             <small>{{ item.hint }}</small>
           </div>
-        </div>
-
-        <div class="live-monitor">
-          <StreamPlayer :stream="activeStream" />
-          <footer>
-            <div><span>视频源</span><strong>{{ activeStream.id }} · {{ activeStream.name }}</strong></div>
-            <div><span>原始流</span><code>{{ maskUrl(activeStream.endpoint) }}</code></div>
-            <div><span>播放协议</span><strong>{{ activeStream.playProtocol || '未配置' }}</strong></div>
-            <div><span>播放地址</span><code>{{ activeStream.playUrl ? maskUrl(activeStream.playUrl) : '等待 HLS / FLV / WebRTC 地址' }}</code></div>
-          </footer>
         </div>
       </section>
 
