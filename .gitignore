@@ -7,3 +7,6 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 prototype-*.png
+hls-frame.jpg
+snapshot-check.jpg
+.runtime/

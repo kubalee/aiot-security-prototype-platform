@@ -141,6 +141,78 @@ code {
   display: grid;
   grid-template-columns: 285px minmax(600px, 1fr) 310px;
   gap: 16px;
+  align-items: start;
+}
+
+.hero-card {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.event-list {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+}
+
+.detail-panel {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+}
+
+.event-row {
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  width: calc(100% - 20px);
+  margin: 10px;
+  padding: 13px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #dfeef8;
+}
+
+.event-row.active {
+  border-color: rgba(73, 167, 255, 0.68);
+  background: rgba(73, 167, 255, 0.12);
+}
+
+.event-row i {
+  width: 8px;
+  height: 42px;
+  border-radius: 99px;
+  background: var(--green);
+}
+
+.event-row i.warning {
+  background: var(--amber);
+}
+
+.event-row i.critical {
+  background: var(--red);
+}
+
+.event-row strong,
+.event-row span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-row span {
+  margin-top: 5px;
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.event-row b {
+  color: #d8f7ff;
+  font-size: 13px;
 }
 
 .panel {
@@ -368,9 +440,23 @@ i.critical {
   inset: 0;
   z-index: 0;
   background: rgba(3, 8, 12, 0.5);
+  background-position: center;
+  background-size: cover;
 }
 
 .stream-player video {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #050b11;
+}
+
+.stream-snapshot {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -380,10 +466,11 @@ i.critical {
 .stream-player.waiting video,
 .stream-player.connecting video,
 .stream-player.error video {
-  opacity: 0.18;
+  opacity: 0;
 }
 
 .player-overlay {
+  z-index: 4;
   position: absolute;
   inset: 0;
   display: grid;
@@ -394,12 +481,37 @@ i.critical {
   background: rgba(5, 11, 17, 0.46);
 }
 
+.player-overlay.compact {
+  inset: auto 16px 16px 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  text-align: left;
+  background: rgba(5, 11, 17, 0.74);
+  backdrop-filter: blur(12px);
+}
+
 .player-overlay b {
   font-size: 18px;
 }
 
+.player-overlay.compact b {
+  font-size: 13px;
+}
+
 .player-overlay span {
   color: #c8d9e5;
+}
+
+.player-overlay.compact span {
+  flex: 1 1 220px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .player-overlay code {
@@ -413,117 +525,6 @@ i.critical {
   background: rgba(7, 16, 25, 0.72);
 }
 
-.live-monitor.fire {
-  background:
-    radial-gradient(circle at 34% 60%, rgba(255, 94, 101, 0.62), transparent 8%),
-    radial-gradient(circle at 39% 57%, rgba(255, 190, 85, 0.58), transparent 11%),
-    linear-gradient(150deg, #151f2d, #283847 46%, #37241f 47%, #0d151f);
-}
-
-.live-monitor.smoke {
-  background:
-    radial-gradient(circle at 58% 36%, rgba(211, 220, 226, 0.45), transparent 20%),
-    radial-gradient(circle at 66% 42%, rgba(130, 148, 160, 0.35), transparent 25%),
-    linear-gradient(150deg, #172233, #253543 46%, #20282f 47%, #0d151f);
-}
-
-.live-monitor.intrusion {
-  background:
-    linear-gradient(90deg, transparent 42%, rgba(73, 167, 255, 0.18) 42% 48%, transparent 48%),
-    linear-gradient(150deg, #151f2d, #243346 46%, #182029 47%, #0d151f);
-}
-
-.live-monitor.obstruction {
-  background:
-    radial-gradient(ellipse at 30% 75%, rgba(255, 190, 85, 0.42), transparent 18%),
-    linear-gradient(150deg, #151f2d, #253342 46%, #34302a 47%, #0d151f);
-}
-
-.live-monitor.offline {
-  filter: grayscale(0.85);
-  opacity: 0.8;
-}
-
-.monitor-grid {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  background-image:
-    linear-gradient(rgba(66, 216, 210, 0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(66, 216, 210, 0.07) 1px, transparent 1px);
-  background-size: 42px 42px;
-}
-
-.scan-line {
-  position: absolute;
-  inset: 0 0 auto;
-  z-index: 2;
-  height: 2px;
-  animation: scan 4s linear infinite;
-  background: linear-gradient(90deg, transparent, rgba(66, 216, 210, 0.85), transparent);
-}
-
-@keyframes scan {
-  from { transform: translateY(0); }
-  to { transform: translateY(430px); }
-}
-
-.camera-chip {
-  position: absolute;
-  z-index: 3;
-  padding: 6px 8px;
-  border: 1px solid rgba(66, 216, 210, 0.35);
-  border-radius: 6px;
-  background: rgba(7, 16, 25, 0.68);
-  color: #caf9f4;
-  font-size: 12px;
-}
-
-.top-left { top: 18px; left: 18px; }
-.top-right { top: 18px; right: 18px; }
-.bottom-left { bottom: 70px; left: 18px; }
-
-.risk-box {
-  position: absolute;
-  z-index: 4;
-  min-width: 150px;
-  padding: 30px 12px 10px;
-  border: 2px solid var(--red);
-  transform: translate(-50%, -50%);
-  box-shadow: 0 0 30px rgba(255, 94, 101, 0.3);
-}
-
-.risk-box.warning {
-  border-color: var(--amber);
-  box-shadow: 0 0 30px rgba(255, 190, 85, 0.26);
-}
-
-.risk-box.normal {
-  border-color: var(--green);
-  box-shadow: 0 0 30px rgba(78, 209, 126, 0.22);
-}
-
-.risk-box span {
-  position: absolute;
-  left: -2px;
-  top: -27px;
-  padding: 5px 8px;
-  background: rgba(255, 94, 101, 0.94);
-  color: #fff;
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.risk-box.warning span {
-  background: rgba(255, 190, 85, 0.94);
-  color: #1d1508;
-}
-
-.risk-box.normal span {
-  background: rgba(78, 209, 126, 0.94);
-  color: #06220f;
-}
-
 .live-monitor footer {
   position: absolute;
   z-index: 5;
@@ -531,23 +532,36 @@ i.critical {
   bottom: 0;
   left: 0;
   display: grid;
-  grid-template-columns: minmax(150px, 0.9fr) minmax(240px, 1.4fr);
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
   align-items: center;
   padding: 14px 16px;
   background: rgba(5, 11, 17, 0.76);
   border-top: 1px solid rgba(255,255,255,0.1);
 }
 
+.live-monitor footer div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.live-monitor footer span {
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
 .live-monitor footer strong,
 .live-monitor footer code {
+  display: block;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-size: 13px;
 }
 
 .live-monitor footer strong {
-  white-space: normal;
+  white-space: nowrap;
 }
 
 .live-monitor footer code {

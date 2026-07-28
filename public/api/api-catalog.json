@@ -1,0 +1,111 @@
+{
+  "apis": [
+    {
+      "id": "event-ingest",
+      "group": "backend",
+      "method": "POST",
+      "path": "/api/security/events/ingest",
+      "name": "AI 设备事件上报",
+      "payload": {
+        "deviceId": "string",
+        "cameraId": "string",
+        "eventType": "string",
+        "confidence": "number",
+        "frameUrl": "string",
+        "metadata": "object"
+      }
+    },
+    {
+      "id": "event-query",
+      "group": "backend",
+      "method": "GET",
+      "path": "/api/security/events",
+      "name": "事件列表与详情",
+      "payload": {
+        "severity": "string",
+        "status": "string",
+        "zone": "string",
+        "page": "number"
+      }
+    },
+    {
+      "id": "stream-config",
+      "group": "backend",
+      "method": "GET/PUT",
+      "path": "/api/security/video-streams",
+      "name": "监控视频流配置",
+      "payload": {
+        "streamId": "string",
+        "protocol": "RTSP | HLS | WebRTC | FLV",
+        "endpoint": "string",
+        "playProtocol": "hls | flv | mpegts | webrtc | native",
+        "playUrl": "string",
+        "enabled": "boolean",
+        "authProfile": "string"
+      }
+    },
+    {
+      "id": "iot-command",
+      "group": "backend",
+      "method": "POST",
+      "path": "/api/iot/linkage/commands",
+      "name": "物联系统联动指令",
+      "payload": {
+        "eventId": "string",
+        "deviceType": "string",
+        "command": "string",
+        "priority": "number"
+      }
+    },
+    {
+      "id": "notification",
+      "group": "backend",
+      "method": "POST",
+      "path": "/api/notification/tasks",
+      "name": "人员通知与回执",
+      "payload": {
+        "eventId": "string",
+        "recipients": "array",
+        "channels": "array",
+        "escalationPolicy": "object"
+      }
+    },
+    {
+      "id": "agent-risk",
+      "group": "agent",
+      "method": "POST",
+      "path": "/agents/risk-assessor/invoke",
+      "name": "风险研判智能体",
+      "payload": {
+        "event": "object",
+        "sensorReadings": "array",
+        "historicalContext": "object"
+      }
+    },
+    {
+      "id": "agent-vision",
+      "group": "agent",
+      "method": "POST",
+      "path": "/agents/vision-reviewer/invoke",
+      "name": "视觉复核智能体",
+      "payload": {
+        "streamId": "string",
+        "frameWindow": "object",
+        "detectionBoxes": "array"
+      }
+    },
+    {
+      "id": "agent-plan",
+      "group": "agent",
+      "method": "POST",
+      "path": "/agents/response-planner/invoke",
+      "name": "处置方案智能体",
+      "payload": {
+        "riskLevel": "string",
+        "zone": "string",
+        "availableDevices": "array",
+        "contacts": "array"
+      }
+    }
+  ]
+}

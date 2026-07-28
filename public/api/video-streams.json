@@ -1,0 +1,21 @@
+{
+  "streams": [
+    {
+      "id": "CAM-A01",
+      "name": "A区 1号楼大门入口",
+      "zone": "A区",
+      "protocol": "RTSP",
+      "endpoint": "",
+      "playProtocol": "hls",
+      "playUrl": "http://127.0.0.1:5177/hls/cam-a01/index.m3u8",
+      "snapshotUrl": "http://127.0.0.1:5177/snapshot/cam-a01.jpg",
+      "status": "online",
+      "priority": 1,
+      "enabled": true,
+      "latency": "实时",
+      "bitrate": "自适应",
+      "resolution": "1920x1080",
+      "authProfile": "local-env"
+    }
+  ]
+}

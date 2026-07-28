@@ -41,7 +41,8 @@ test('getPlatformMetrics summarizes event, stream, linkage, and notification sta
   const metrics = getPlatformMetrics(events, videoStreams);
 
   assert.equal(metrics.totalEvents, 5);
-  assert.equal(metrics.criticalEvents, 2);
+  assert.equal(metrics.criticalEvents, 0);
+  assert.equal(metrics.processingEvents, 2);
   assert.equal(metrics.liveStreams, 4);
   assert.equal(metrics.apiReserved, 9);
   assert.equal(metrics.averageConfidence, 86.7);

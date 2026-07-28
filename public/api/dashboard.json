@@ -1,0 +1,42 @@
+{
+  "operator": {
+    "name": "李明",
+    "role": "值班主管",
+    "time": "14:42:26"
+  },
+  "stages": ["设备上报", "AI 复核", "风险决策", "联动执行", "复查闭环"],
+  "incidents": [
+    {
+      "id": "INC-20260728-001",
+      "title": "A区入口摄像头在线",
+      "zone": "A区",
+      "location": "A区 · 1号楼大门入口",
+      "cameraId": "CAM-A01",
+      "time": "14:40:18",
+      "severity": "normal",
+      "severityText": "在线",
+      "confidence": 97.4,
+      "progress": 100,
+      "stage": 4,
+      "aiDecision": "当前已接入实时监控视频流。AI 识别、告警复核、物联系统联动结果将等待后端事件接口推送后更新。",
+      "recommendations": ["保持视频流在线", "等待 AI 事件接口上报", "确认物联联动接口可用", "保留人工复核入口"],
+      "detections": [
+        { "label": "实时视频流", "confidence": 100 },
+        { "label": "AI 事件接口", "confidence": 0 },
+        { "label": "物联接口", "confidence": 0 },
+        { "label": "通知接口", "confidence": 0 }
+      ],
+      "linkage": [
+        { "name": "视频网关", "target": "CAM-A01", "status": "done", "label": "已接入" },
+        { "name": "AI 复核服务", "target": "主摄像头", "status": "done", "label": "已就绪" },
+        { "name": "物联系统", "target": "联动接口", "status": "pending", "label": "待接口" },
+        { "name": "通知服务", "target": "值班组", "status": "pending", "label": "待接口" }
+      ],
+      "contacts": [
+        { "name": "李明", "role": "值班主管", "channel": "App", "status": "pending", "label": "待通知" },
+        { "name": "周倩", "role": "运维负责人", "channel": "App / 短信", "status": "pending", "label": "待通知" },
+        { "name": "王磊", "role": "物业经理", "channel": "电话外呼", "status": "pending", "label": "待通知" }
+      ]
+    }
+  ]
+}
