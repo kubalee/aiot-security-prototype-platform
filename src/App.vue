@@ -10,7 +10,7 @@ import {
   upsertById,
 } from './platformModel.js';
 
-const dataVersion = '2026-07-28-live-json-v2';
+const dataVersion = '2026-07-28-live-json-v3';
 const storageKeys = {
   streams: 'aiot-security.streams.playback.v1',
   apis: 'aiot-security.apis',
@@ -144,11 +144,23 @@ const metrics = computed(() => getPlatformMetrics(incidents.value, configuredStr
 const stageBars = computed(() => stages.value.map((stage, index) => ({
   name: stage,
   count: incidents.value.filter((event) => event.stage === index).length,
+  active: index <= (activeEvent.value.stage ?? -1),
 })));
 const severityRows = computed(() => [
   { label: '严重', value: incidents.value.filter((event) => event.severity === 'critical').length, tone: 'critical' },
   { label: '警告', value: incidents.value.filter((event) => event.severity === 'warning').length, tone: 'warning' },
-  { label: '一般/在线', value: incidents.value.filter((event) => event.severity === 'normal').length, tone: 'normal' },
+  { label: '在线/一般', value: incidents.value.filter((event) => event.severity === 'normal').length, tone: 'normal' },
+]);
+const commandStats = computed(() => [
+  { label: '事件总量', value: metrics.value.totalEvents, hint: '接口事件', tone: 'cyan' },
+  { label: '实时视频', value: metrics.value.liveStreams, hint: '启用流', tone: 'blue' },
+  { label: '联动进度', value: `${metrics.value.activeLinkage}/${metrics.value.totalLinkage}`, hint: '设备动作', tone: 'green' },
+  { label: '通知触达', value: `${metrics.value.touchedContacts}/${metrics.value.totalContacts}`, hint: '人员回执', tone: 'amber' },
+]);
+const apiReadiness = computed(() => [
+  { label: '后端接口', value: apiGroups.value.backend.length, hint: '事件 / 视频 / 联动 / 通知' },
+  { label: '智能体接口', value: apiGroups.value.agent.length, hint: '视觉 / 风险 / 方案' },
+  { label: 'JSON 契约', value: 3, hint: 'dashboard / streams / api' },
 ]);
 
 function resetStreamForm() {
@@ -301,76 +313,120 @@ onMounted(loadPageData);
         <span class="brand-mark">安</span>
         <div>
           <strong>安防 AIoT 联动中枢</strong>
-          <small>可运行前端配置平台</small>
+          <small>事件接入 · 智能研判 · 联动通知</small>
         </div>
       </div>
+
       <div class="live-badge">
-        <span></span>{{ loading ? '正在加载接口 JSON' : `${metrics.totalEvents} 条事件 · ${metrics.liveStreams} 路启用流 · ${metrics.apiReserved} 个 API 配置` }}
+        <span></span>{{ loading ? '正在读取本地 JSON 接口' : `${metrics.totalEvents} 条事件 · ${metrics.liveStreams} 路视频 · ${metrics.apiReserved} 个接口` }}
       </div>
-      <nav class="view-tabs">
-        <button :class="{ active: view === 'command' }" @click="view = 'command'">指挥看板</button>
-        <button :class="{ active: view === 'analytics' }" @click="view = 'analytics'">统计分析</button>
-        <button :class="{ active: view === 'config' }" @click="view = 'config'">接入配置</button>
+
+      <nav class="view-tabs" aria-label="页面切换">
+        <button :class="{ active: view === 'command' }" @click="view = 'command'">指挥</button>
+        <button :class="{ active: view === 'analytics' }" @click="view = 'analytics'">分析</button>
+        <button :class="{ active: view === 'config' }" @click="view = 'config'">配置</button>
       </nav>
-      <div class="operator">值班：{{ operator.name }} · {{ operator.time }}</div>
+
+      <div class="operator">
+        <span>当前值班</span>
+        <strong>{{ operator.name }}</strong>
+        <small>{{ operator.role }} · {{ operator.time }}</small>
+      </div>
     </header>
 
     <section v-if="loading" class="panel loading-panel">正在加载 /api/dashboard.json、/api/video-streams.json、/api/api-catalog.json...</section>
 
-    <main v-if="!loading && view === 'command'" class="command-grid">
-      <section class="panel hero-card">
-        <div class="panel-head">
+    <main v-if="!loading && view === 'command'" class="command-workspace">
+      <aside class="panel situation-panel">
+        <div class="section-title">
+          <span>事件队列</span>
+          <strong>{{ incidents.length }}</strong>
+        </div>
+        <button
+          v-for="event in incidents"
+          :key="event.id"
+          class="event-row"
+          :class="{ active: event.id === activeEvent.id }"
+          @click="selectEvent(event)"
+        >
+          <i :class="event.severity"></i>
           <div>
-            <p>AI 事件处置</p>
-            <h1>{{ activeEvent.title || '等待事件上报' }}</h1>
+            <strong>{{ event.title }}</strong>
+            <span>{{ event.location }}</span>
           </div>
-          <span class="status-pill" :class="activeEvent.severity">{{ activeEvent.severityText || '待上报' }}</span>
+          <b>{{ event.confidence }}%</b>
+        </button>
+
+        <div class="mini-section">
+          <span>视频流</span>
+          <button
+            v-for="stream in liveStreams"
+            :key="stream.id"
+            class="stream-pill"
+            :class="{ active: stream.id === activeStream.id }"
+            @click="selectStream(stream)"
+          >
+            <i :class="stream.status"></i>
+            <strong>{{ stream.id }}</strong>
+            <small>{{ stream.zone }}</small>
+          </button>
+        </div>
+      </aside>
+
+      <section class="panel live-stage">
+        <div class="stage-header">
+          <div>
+            <span>当前态势</span>
+            <h1>{{ activeEvent.title || '等待事件上报' }}</h1>
+            <p>{{ activeEvent.location }} · {{ activeEvent.time }}</p>
+          </div>
+          <b class="status-pill" :class="activeEvent.severity">{{ activeEvent.severityText || '待上报' }}</b>
         </div>
 
-        <div class="kpi-row">
-          <div class="kpi critical"><span>严重事件</span><strong>{{ metrics.criticalEvents }}</strong><small>需立即处置</small></div>
-          <div class="kpi"><span>处理中</span><strong>{{ metrics.processingEvents }}</strong><small>跨系统跟进</small></div>
-          <div class="kpi blue"><span>实时视频流</span><strong>{{ metrics.liveStreams }}</strong><small>配置驱动</small></div>
-          <div class="kpi green"><span>平均置信度</span><strong>{{ metrics.averageConfidence }}%</strong><small>AI 复核结果</small></div>
+        <div class="stat-strip">
+          <div v-for="item in commandStats" :key="item.label" class="metric-tile" :class="item.tone">
+            <span>{{ item.label }}</span>
+            <strong>{{ item.value }}</strong>
+            <small>{{ item.hint }}</small>
+          </div>
         </div>
 
         <div class="live-monitor">
           <StreamPlayer :stream="activeStream" />
           <footer>
-            <div><span>当前视频源</span><strong>{{ activeStream.id }} · {{ activeStream.name }}</strong></div>
+            <div><span>视频源</span><strong>{{ activeStream.id }} · {{ activeStream.name }}</strong></div>
             <div><span>原始流</span><code>{{ maskUrl(activeStream.endpoint) }}</code></div>
-            <div><span>网页播放</span><strong>{{ activeStream.playProtocol || '未配置' }}</strong></div>
+            <div><span>播放协议</span><strong>{{ activeStream.playProtocol || '未配置' }}</strong></div>
             <div><span>播放地址</span><code>{{ activeStream.playUrl ? maskUrl(activeStream.playUrl) : '等待 HLS / FLV / WebRTC 地址' }}</code></div>
           </footer>
         </div>
       </section>
 
-      <section class="panel event-list">
-        <div class="panel-head"><h2>事件队列</h2><span>{{ incidents.length }}</span></div>
-        <button v-for="event in incidents" :key="event.id" class="event-row" :class="{ active: event.id === activeEvent.id }" @click="selectEvent(event)">
-          <i :class="event.severity"></i>
-          <div><strong>{{ event.title }}</strong><span>{{ event.location }} · {{ event.time }}</span></div>
-          <b>{{ event.confidence }}%</b>
-        </button>
-      </section>
-
-      <section class="panel detail-panel">
-        <div class="panel-head"><h2>AI 决策</h2><span>{{ activeEvent.id }}</span></div>
+      <aside class="panel response-panel">
+        <div class="section-title">
+          <span>AI 研判</span>
+          <strong>{{ activeEvent.id }}</strong>
+        </div>
         <p class="decision-copy">{{ activeEvent.aiDecision }}</p>
-        <div class="flow">
-          <div v-for="(stage, index) in stages" :key="stage" class="flow-step" :class="stageState(index)">
+
+        <div class="timeline">
+          <div v-for="(stage, index) in stages" :key="stage" :class="stageState(index)">
             <b>{{ index + 1 }}</b>
             <span>{{ stage }}</span>
           </div>
         </div>
-        <div class="recommendations">
-          <strong>建议动作</strong>
-          <span v-for="item in activeEvent.recommendations || []" :key="item">{{ item }}</span>
-        </div>
-      </section>
 
-      <section class="panel">
-        <div class="panel-head"><h2>识别结果</h2><span>{{ activeEvent.confidence }}%</span></div>
+        <div class="action-list">
+          <span>建议动作</span>
+          <button v-for="item in activeEvent.recommendations || []" :key="item">{{ item }}</button>
+        </div>
+      </aside>
+
+      <section class="panel signal-panel">
+        <div class="section-title">
+          <span>识别与接口信号</span>
+          <strong>{{ activeEvent.confidence }}%</strong>
+        </div>
         <div v-for="item in activeEvent.detections || []" :key="item.label" class="meter-row">
           <span>{{ item.label }}</span>
           <div><i :style="{ width: `${item.confidence}%` }"></i></div>
@@ -378,37 +434,43 @@ onMounted(loadPageData);
         </div>
       </section>
 
-      <section class="panel">
-        <div class="panel-head"><h2>物联系统联动</h2><span>{{ metrics.activeLinkage }}/{{ metrics.totalLinkage }}</span></div>
-        <div v-for="item in activeEvent.linkage || []" :key="`${item.name}-${item.target}`" class="table-row">
+      <section class="panel linkage-panel">
+        <div class="section-title">
+          <span>物联系统联动</span>
+          <strong>{{ metrics.activeLinkage }}/{{ metrics.totalLinkage }}</strong>
+        </div>
+        <div v-for="item in activeEvent.linkage || []" :key="`${item.name}-${item.target}`" class="table-row compact">
           <div><strong>{{ item.name }}</strong><span>{{ item.target }}</span></div>
           <b :class="item.status">{{ item.label }}</b>
         </div>
       </section>
 
-      <section class="panel">
-        <div class="panel-head"><h2>人员通知</h2><span>{{ metrics.touchedContacts }}/{{ metrics.totalContacts }}</span></div>
-        <div v-for="item in activeEvent.contacts || []" :key="`${item.name}-${item.channel}`" class="table-row">
+      <section class="panel contact-panel">
+        <div class="section-title">
+          <span>人员通知</span>
+          <strong>{{ metrics.touchedContacts }}/{{ metrics.totalContacts }}</strong>
+        </div>
+        <div v-for="item in activeEvent.contacts || []" :key="`${item.name}-${item.channel}`" class="table-row compact">
           <div><strong>{{ item.name }}</strong><span>{{ item.role }} · {{ item.channel }}</span></div>
           <b :class="item.status">{{ item.label }}</b>
         </div>
       </section>
     </main>
 
-    <main v-if="!loading && view === 'analytics'" class="config-page">
-      <section class="config-hero">
+    <main v-if="!loading && view === 'analytics'" class="analytics-page">
+      <section class="page-intro">
         <span>DATA ANALYTICS</span>
-        <h1>安防 AI 联动统计分析</h1>
-        <p>从 AI 事件、实时视频流、物联系统联动、人员通知和 API 接入准备度五个维度评估平台状态。</p>
+        <h1>联动效率与接入质量</h1>
+        <p>从事件、视频、物联系统、人员通知和接口契约五个维度看平台状态。</p>
       </section>
 
       <section class="analysis-grid">
         <div class="analysis-card"><h2>事件总量</h2><strong>{{ metrics.totalEvents }}</strong><p>来自本地 JSON 或后端事件接口。</p></div>
         <div class="analysis-card"><h2>平均置信度</h2><strong>{{ metrics.averageConfidence }}%</strong><p>按当前事件队列实时计算。</p></div>
         <div class="analysis-card"><h2>实时视频流</h2><strong>{{ metrics.liveStreams }}</strong><p>由接入配置中的启用状态计算。</p></div>
-        <div class="analysis-card"><h2>API 配置</h2><strong>{{ metrics.apiReserved }}</strong><p>后端接口与智能体接口总数。</p></div>
+        <div class="analysis-card"><h2>接口准备度</h2><strong>{{ metrics.apiReserved }}</strong><p>后端接口与智能体接口总数。</p></div>
         <div class="analysis-card wide">
-          <h2>事件阶段分布</h2>
+          <h2>处置阶段分布</h2>
           <div v-for="stage in stageBars" :key="stage.name" class="meter-row">
             <span>{{ stage.name }}</span>
             <div><i :style="{ width: `${Math.max(stage.count, 0.1) * 20}%` }"></i></div>
@@ -417,7 +479,7 @@ onMounted(loadPageData);
         </div>
         <div class="analysis-card wide">
           <h2>事件等级分布</h2>
-          <div v-for="row in severityRows" :key="row.label" class="table-row">
+          <div v-for="row in severityRows" :key="row.label" class="table-row compact">
             <div><strong>{{ row.label }}</strong><span>{{ row.tone }}</span></div>
             <b>{{ row.value }}</b>
           </div>
@@ -426,16 +488,26 @@ onMounted(loadPageData);
     </main>
 
     <main v-if="!loading && view === 'config'" class="config-page">
-      <section class="config-hero">
-        <span>INTEGRATION CONFIG</span>
-        <h1>监控视频流与 API 接入配置</h1>
-        <p>默认数据来自 public/api 下的 JSON 文件。后端保持相同字段结构后，可直接切换成真实接口。</p>
+      <section class="page-intro config-intro">
+        <div>
+          <span>INTEGRATION GOVERNANCE</span>
+          <h1>接入治理与接口预留</h1>
+          <p>页面内容由 `public/api` 的 JSON 驱动；后端按同样字段返回即可替换成本地接口。</p>
+        </div>
         <button class="ghost-button" @click="restoreDefaults">恢复默认配置</button>
       </section>
 
+      <section class="readiness-strip">
+        <div v-for="item in apiReadiness" :key="item.label">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
+          <small>{{ item.hint }}</small>
+        </div>
+      </section>
+
       <section class="config-grid">
-        <div class="panel">
-          <div class="panel-head"><h2>{{ editingStreamId ? '编辑视频流' : '新增视频流' }}</h2><span>stream config</span></div>
+        <div class="panel editor-panel">
+          <div class="section-title"><span>{{ editingStreamId ? '编辑视频流' : '新增视频流' }}</span><strong>stream</strong></div>
           <form class="config-form" @submit.prevent="saveStream">
             <label>流 ID<input v-model.trim="streamForm.id" required></label>
             <label>名称<input v-model.trim="streamForm.name" required></label>
@@ -454,8 +526,8 @@ onMounted(loadPageData);
           </form>
         </div>
 
-        <div class="panel">
-          <div class="panel-head"><h2>{{ editingApiId ? '编辑 API' : '新增 API' }}</h2><span>api config</span></div>
+        <div class="panel editor-panel">
+          <div class="section-title"><span>{{ editingApiId ? '编辑 API' : '新增 API' }}</span><strong>api</strong></div>
           <form class="config-form" @submit.prevent="saveApi">
             <label>API ID<input v-model.trim="apiForm.id" required></label>
             <label>类型<select v-model="apiForm.group"><option value="backend">后端 API</option><option value="agent">智能体 API</option></select></label>
@@ -471,9 +543,9 @@ onMounted(loadPageData);
         </div>
 
         <div class="panel wide">
-          <div class="panel-head"><h2>监控视频流配置</h2><span>{{ liveStreams.length }} 路启用 / {{ configuredStreams.length }} 路总配置</span></div>
+          <div class="section-title"><span>监控视频流</span><strong>{{ liveStreams.length }} / {{ configuredStreams.length }}</strong></div>
           <div v-for="stream in configuredStreams" :key="stream.id" class="table-row config-row" :class="{ active: stream.id === activeStream.id }">
-            <button class="stream-row" @click="selectStream(stream)">
+            <button class="stream-line" @click="selectStream(stream)">
               <i :class="stream.status"></i>
               <div><strong>{{ stream.id }} · {{ stream.name }}</strong><span>{{ stream.zone }} · {{ stream.protocol }} · {{ stream.resolution }}</span></div>
             </button>
@@ -488,16 +560,16 @@ onMounted(loadPageData);
         </div>
 
         <div class="panel">
-          <div class="panel-head"><h2>后端 API 配置</h2><span>{{ apiGroups.backend.length }}</span></div>
-          <div v-for="api in apiGroups.backend" :key="api.id" class="table-row">
+          <div class="section-title"><span>后端 API</span><strong>{{ apiGroups.backend.length }}</strong></div>
+          <div v-for="api in apiGroups.backend" :key="api.id" class="table-row api-row">
             <div><strong>{{ api.method }} {{ api.path }}</strong><span>{{ api.name }}</span><small>{{ formatPayload(api.payload) }}</small></div>
             <div class="form-actions"><button class="ghost-button" @click="editApi(api)">编辑</button><button class="ghost-button" @click="deleteApi(api.id)">删除</button></div>
           </div>
         </div>
 
         <div class="panel">
-          <div class="panel-head"><h2>智能体 API 配置</h2><span>{{ apiGroups.agent.length }}</span></div>
-          <div v-for="api in apiGroups.agent" :key="api.id" class="table-row">
+          <div class="section-title"><span>智能体 API</span><strong>{{ apiGroups.agent.length }}</strong></div>
+          <div v-for="api in apiGroups.agent" :key="api.id" class="table-row api-row">
             <div><strong>{{ api.method }} {{ api.path }}</strong><span>{{ api.name }}</span><small>{{ formatPayload(api.payload) }}</small></div>
             <div class="form-actions"><button class="ghost-button" @click="editApi(api)">编辑</button><button class="ghost-button" @click="deleteApi(api.id)">删除</button></div>
           </div>
