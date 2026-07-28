@@ -7,6 +7,8 @@ import {
   getEventStream,
   getLiveStreams,
   getPlatformMetrics,
+  removeById,
+  upsertById,
   videoStreams,
 } from './platformModel.js';
 
@@ -43,4 +45,27 @@ test('getPlatformMetrics summarizes event, stream, linkage, and notification sta
   assert.equal(metrics.liveStreams, 4);
   assert.equal(metrics.apiReserved, 9);
   assert.equal(metrics.averageConfidence, 86.7);
+});
+
+test('upsertById inserts and updates editable configuration rows', () => {
+  const inserted = upsertById([{ id: 'CAM-A01', name: 'old' }], { id: 'CAM-X01', name: 'new' });
+  assert.deepEqual(inserted.map((item) => item.id), ['CAM-A01', 'CAM-X01']);
+
+  const updated = upsertById(inserted, { id: 'CAM-A01', name: 'updated' });
+  assert.equal(updated.length, 2);
+  assert.equal(updated.find((item) => item.id === 'CAM-A01').name, 'updated');
+});
+
+test('removeById removes editable configuration rows', () => {
+  const rows = removeById([{ id: 'api-a' }, { id: 'api-b' }], 'api-a');
+
+  assert.deepEqual(rows, [{ id: 'api-b' }]);
+});
+
+test('getPlatformMetrics uses configured api catalog instead of default catalog', () => {
+  const metrics = getPlatformMetrics(events, videoStreams, [
+    { id: 'only-one', group: 'backend', path: '/api/only-one' },
+  ]);
+
+  assert.equal(metrics.apiReserved, 1);
 });

@@ -257,7 +257,17 @@ export function getApiGroups(catalog = apiCatalog) {
   };
 }
 
-export function getPlatformMetrics(sourceEvents = events, streams = videoStreams) {
+export function upsertById(collection, item) {
+  const index = collection.findIndex((entry) => entry.id === item.id);
+  if (index === -1) return [...collection, item];
+  return collection.map((entry) => (entry.id === item.id ? item : entry));
+}
+
+export function removeById(collection, id) {
+  return collection.filter((entry) => entry.id !== id);
+}
+
+export function getPlatformMetrics(sourceEvents = events, streams = videoStreams, catalog = apiCatalog) {
   const allLinkage = sourceEvents.flatMap((event) => event.linkage);
   const allContacts = sourceEvents.flatMap((event) => event.contacts);
   return {
@@ -265,7 +275,7 @@ export function getPlatformMetrics(sourceEvents = events, streams = videoStreams
     criticalEvents: sourceEvents.filter((event) => event.severity === 'critical').length,
     processingEvents: sourceEvents.filter((event) => event.progress < 100).length,
     liveStreams: getLiveStreams(streams).length,
-    apiReserved: apiCatalog.length,
+    apiReserved: catalog.length,
     activeLinkage: allLinkage.filter((item) => ['done', 'running'].includes(item.status)).length,
     totalLinkage: allLinkage.length,
     touchedContacts: allContacts.filter((item) => ['done', 'running'].includes(item.status)).length,
