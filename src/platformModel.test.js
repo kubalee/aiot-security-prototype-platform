@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import {
   apiCatalog,
   events,
@@ -69,4 +71,30 @@ test('getPlatformMetrics uses configured api catalog instead of default catalog'
   ]);
 
   assert.equal(metrics.apiReserved, 1);
+});
+
+test('api mock contracts cover every catalog endpoint used by the prototype', () => {
+  const root = process.cwd();
+  const catalog = JSON.parse(fs.readFileSync(path.join(root, 'public/api/api-catalog.json'), 'utf8'));
+  const mocks = JSON.parse(fs.readFileSync(path.join(root, 'public/api/api-mocks.json'), 'utf8'));
+  const mockIds = new Set(mocks.interfaces.map((item) => item.id));
+
+  assert.equal(mocks.summary.total, mocks.interfaces.length);
+  assert.equal(mocks.summary.backend, mocks.interfaces.filter((item) => item.group === 'backend').length);
+  assert.equal(mocks.summary.agent, mocks.interfaces.filter((item) => item.group === 'agent').length);
+
+  for (const api of catalog.apis) {
+    assert.ok(mockIds.has(api.id), `${api.id} is missing from api-mocks.json`);
+  }
+
+  for (const item of mocks.interfaces) {
+    assert.ok(item.id);
+    assert.ok(item.method);
+    assert.ok(item.path);
+    assert.ok(item.name);
+    assert.ok(item.description);
+    assert.ok(item.responseExample);
+    assert.ok(Array.isArray(item.fields), `${item.id} fields must be documented`);
+    assert.ok(Array.isArray(item.statusCodes), `${item.id} statusCodes must be documented`);
+  }
 });

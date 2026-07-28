@@ -10,7 +10,7 @@ import {
   upsertById,
 } from './platformModel.js';
 
-const dataVersion = '2026-07-28-live-json-v3';
+const dataVersion = '2026-07-28-live-json-v4';
 const storageKeys = {
   streams: 'aiot-security.streams.playback.v1',
   apis: 'aiot-security.apis',
@@ -55,6 +55,15 @@ function formatPayload(payload) {
   return JSON.stringify(payload);
 }
 
+function formatJson(payload) {
+  if (!payload || (Array.isArray(payload) && !payload.length)) return '{}';
+  return JSON.stringify(payload, null, 2);
+}
+
+function methodTone(method = '') {
+  return method.toLowerCase().replace(/[^a-z]/g, '-') || 'get';
+}
+
 async function fetchJson(path, fallback) {
   try {
     const response = await fetch(path, { cache: 'no-store' });
@@ -84,8 +93,9 @@ function mergeLocalPrimaryStream(streams) {
   });
 }
 
+const validViews = ['command', 'analytics', 'interfaces', 'config'];
 const initialView = new URLSearchParams(window.location.search).get('view');
-const view = ref(['command', 'analytics', 'config'].includes(initialView) ? initialView : 'command');
+const view = ref(validViews.includes(initialView) ? initialView : 'command');
 const loading = ref(true);
 const operator = ref({ name: '-', role: '-', time: '--:--:--' });
 const stages = ref([]);
@@ -97,6 +107,8 @@ const configuredApis = ref([]);
 const editingStreamId = ref('');
 const editingApiId = ref('');
 const videoInfoPinned = ref(false);
+const apiMockPayload = ref({ interfaces: [], flows: [], summary: {} });
+const activeInterfaceId = ref('');
 
 const streamForm = reactive({
   id: '',
@@ -161,8 +173,29 @@ const commandStats = computed(() => [
 const apiReadiness = computed(() => [
   { label: '后端接口', value: apiGroups.value.backend.length, hint: '事件 / 视频 / 联动 / 通知' },
   { label: '智能体接口', value: apiGroups.value.agent.length, hint: '视觉 / 风险 / 方案' },
-  { label: 'JSON 契约', value: 3, hint: 'dashboard / streams / api' },
+  { label: 'JSON 契约', value: apiMockPayload.value.interfaces.length || 4, hint: 'dashboard / streams / api / mocks' },
 ]);
+const interfaceContracts = computed(() => apiMockPayload.value.interfaces || []);
+const activeInterface = computed(() => (
+  interfaceContracts.value.find((item) => item.id === activeInterfaceId.value)
+  || interfaceContracts.value[0]
+  || {}
+));
+const interfaceGroups = computed(() => interfaceContracts.value.reduce((groups, item) => {
+  const key = item.domain || item.group || 'other';
+  if (!groups[key]) groups[key] = [];
+  groups[key].push(item);
+  return groups;
+}, {}));
+const interfaceStats = computed(() => {
+  const items = interfaceContracts.value;
+  return [
+    { label: '接口总数', value: items.length, hint: '可交付契约' },
+    { label: '后端接口', value: items.filter((item) => item.group === 'backend').length, hint: '/api/*' },
+    { label: '智能体接口', value: items.filter((item) => item.group === 'agent').length, hint: '/agents/*' },
+    { label: '调用链路', value: apiMockPayload.value.flows?.length || 0, hint: '业务流程' },
+  ];
+});
 
 function resetStreamForm() {
   Object.assign(streamForm, {
@@ -274,6 +307,10 @@ function selectStream(stream) {
   if (event) activeEventId.value = event.id;
 }
 
+function selectInterface(item) {
+  activeInterfaceId.value = item.id;
+}
+
 function stageState(index) {
   if (index < activeEvent.value.stage) return 'done';
   if (index === activeEvent.value.stage) return 'active';
@@ -283,10 +320,11 @@ function stageState(index) {
 async function loadPageData() {
   loading.value = true;
   clearStaleStorage();
-  const [dashboard, streamPayload, apiPayload] = await Promise.all([
+  const [dashboard, streamPayload, apiPayload, mockPayload] = await Promise.all([
     fetchJson('/api/dashboard.json', { operator: {}, stages: [], incidents: [] }),
     fetchJson('/api/video-streams.json', { streams: [] }),
     fetchJson('/api/api-catalog.json', { apis: [] }),
+    fetchJson('/api/api-mocks.json', { interfaces: [], flows: [], summary: {} }),
   ]);
 
   operator.value = dashboard.operator || operator.value;
@@ -298,8 +336,10 @@ async function loadPageData() {
   const storedApis = readStorage(storageKeys.apis, apiPayload.apis || []);
   configuredStreams.value = mergeLocalPrimaryStream(storedStreams.length ? storedStreams : apiStreams);
   configuredApis.value = storedApis.length ? storedApis : apiPayload.apis || [];
+  apiMockPayload.value = mockPayload;
   activeEventId.value = incidents.value[0]?.id || '';
   activeStreamId.value = incidents.value[0]?.cameraId || configuredStreams.value[0]?.id || '';
+  activeInterfaceId.value = mockPayload.interfaces?.[0]?.id || '';
   resetStreamForm();
   resetApiForm();
   loading.value = false;
@@ -326,6 +366,7 @@ onMounted(loadPageData);
       <nav class="view-tabs" aria-label="页面切换">
         <button :class="{ active: view === 'command' }" @click="view = 'command'">指挥</button>
         <button :class="{ active: view === 'analytics' }" @click="view = 'analytics'">分析</button>
+        <button :class="{ active: view === 'interfaces' }" @click="view = 'interfaces'">接口</button>
         <button :class="{ active: view === 'config' }" @click="view = 'config'">配置</button>
       </nav>
 
@@ -494,6 +535,117 @@ onMounted(loadPageData);
             <b>{{ row.value }}</b>
           </div>
         </div>
+      </section>
+    </main>
+
+    <main v-if="!loading && view === 'interfaces'" class="interfaces-page">
+      <section class="page-intro interface-intro">
+        <div>
+          <span>API MOCK CENTER</span>
+          <h1>接口模拟与后端契约</h1>
+          <p>当前没有真实接口时，前端读取 `public/api/api-mocks.json`。后端后续按这里的路径、入参和返回字段实现即可。</p>
+        </div>
+        <a class="ghost-button" href="/api/api-mocks.json" target="_blank" rel="noreferrer">查看原始 JSON</a>
+      </section>
+
+      <section class="readiness-strip">
+        <div v-for="item in interfaceStats" :key="item.label">
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
+          <small>{{ item.hint }}</small>
+        </div>
+      </section>
+
+      <section class="api-workspace">
+        <aside class="panel api-sidebar">
+          <div class="section-title">
+            <span>接口分组</span>
+            <strong>{{ interfaceContracts.length }}</strong>
+          </div>
+          <div v-for="(items, domain) in interfaceGroups" :key="domain" class="api-group">
+            <b>{{ domain }}</b>
+            <button
+              v-for="item in items"
+              :key="item.id"
+              class="api-contract-row"
+              :class="{ active: activeInterface.id === item.id }"
+              @click="selectInterface(item)"
+            >
+              <span :class="['method-chip', methodTone(item.method)]">{{ item.method }}</span>
+              <div>
+                <strong>{{ item.name }}</strong>
+                <small>{{ item.path }}</small>
+              </div>
+            </button>
+          </div>
+        </aside>
+
+        <section class="panel api-detail">
+          <div class="section-title">
+            <span>{{ activeInterface.name || '接口详情' }}</span>
+            <strong>{{ activeInterface.id }}</strong>
+          </div>
+          <div class="api-heading">
+            <span :class="['method-chip', methodTone(activeInterface.method)]">{{ activeInterface.method }}</span>
+            <code>{{ activeInterface.path }}</code>
+          </div>
+          <p class="decision-copy">{{ activeInterface.description }}</p>
+
+          <div class="api-meta-grid">
+            <div>
+              <span>类型</span>
+              <strong>{{ activeInterface.group }}</strong>
+            </div>
+            <div>
+              <span>领域</span>
+              <strong>{{ activeInterface.domain }}</strong>
+            </div>
+            <div>
+              <span>页面使用</span>
+              <strong>{{ (activeInterface.usedBy || []).join(' / ') }}</strong>
+            </div>
+          </div>
+
+          <div class="api-json-grid">
+            <div>
+              <h2>请求示例</h2>
+              <pre>{{ formatJson(activeInterface.requestExample || activeInterface.query) }}</pre>
+            </div>
+            <div>
+              <h2>响应示例</h2>
+              <pre>{{ formatJson(activeInterface.responseExample) }}</pre>
+            </div>
+          </div>
+
+          <div class="api-table-grid">
+            <div>
+              <h2>字段说明</h2>
+              <div v-for="field in activeInterface.fields || []" :key="field.name" class="table-row api-field-row">
+                <div><strong>{{ field.name }}</strong><span>{{ field.note }}</span></div>
+                <b>{{ field.type }}{{ field.required ? ' · 必填' : '' }}</b>
+              </div>
+            </div>
+            <div>
+              <h2>状态码</h2>
+              <div v-for="status in activeInterface.statusCodes || []" :key="status.code" class="table-row api-field-row">
+                <div><strong>{{ status.code }}</strong><span>{{ status.meaning }}</span></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="panel api-flow-panel">
+          <div class="section-title">
+            <span>调用链路</span>
+            <strong>{{ apiMockPayload.version }}</strong>
+          </div>
+          <div v-for="flow in apiMockPayload.flows || []" :key="flow.id" class="api-flow">
+            <strong>{{ flow.name }}</strong>
+            <ol>
+              <li v-for="step in flow.steps" :key="step">{{ step }}</li>
+            </ol>
+          </div>
+        </aside>
       </section>
     </main>
 

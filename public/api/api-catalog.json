@@ -1,6 +1,28 @@
 {
   "apis": [
     {
+      "id": "dashboard-overview",
+      "group": "backend",
+      "method": "GET",
+      "path": "/api/dashboard.json",
+      "name": "指挥看板汇总",
+      "payload": {
+        "zone": "string",
+        "from": "datetime",
+        "to": "datetime"
+      }
+    },
+    {
+      "id": "video-streams",
+      "group": "backend",
+      "method": "GET",
+      "path": "/api/video-streams.json",
+      "name": "视频流配置",
+      "payload": {
+        "enabledOnly": "boolean"
+      }
+    },
+    {
       "id": "event-ingest",
       "group": "backend",
       "method": "POST",
@@ -16,32 +38,14 @@
       }
     },
     {
-      "id": "event-query",
+      "id": "event-detail",
       "group": "backend",
       "method": "GET",
-      "path": "/api/security/events",
-      "name": "事件列表与详情",
+      "path": "/api/security/events/{eventId}",
+      "name": "事件详情",
       "payload": {
-        "severity": "string",
-        "status": "string",
-        "zone": "string",
-        "page": "number"
-      }
-    },
-    {
-      "id": "stream-config",
-      "group": "backend",
-      "method": "GET/PUT",
-      "path": "/api/security/video-streams",
-      "name": "监控视频流配置",
-      "payload": {
-        "streamId": "string",
-        "protocol": "RTSP | HLS | WebRTC | FLV",
-        "endpoint": "string",
-        "playProtocol": "hls | flv | mpegts | webrtc | native",
-        "playUrl": "string",
-        "enabled": "boolean",
-        "authProfile": "string"
+        "eventId": "string",
+        "includeLogs": "boolean"
       }
     },
     {
@@ -52,22 +56,76 @@
       "name": "物联系统联动指令",
       "payload": {
         "eventId": "string",
-        "deviceType": "string",
-        "command": "string",
-        "priority": "number"
+        "commands": "array"
       }
     },
     {
-      "id": "notification",
+      "id": "notification-task",
       "group": "backend",
       "method": "POST",
       "path": "/api/notification/tasks",
-      "name": "人员通知与回执",
+      "name": "人员通知任务",
       "payload": {
         "eventId": "string",
         "recipients": "array",
         "channels": "array",
         "escalationPolicy": "object"
+      }
+    },
+    {
+      "id": "notification-receipts",
+      "group": "backend",
+      "method": "GET",
+      "path": "/api/notification/tasks/{taskId}/receipts",
+      "name": "通知回执查询",
+      "payload": {
+        "taskId": "string"
+      }
+    },
+    {
+      "id": "contacts",
+      "group": "backend",
+      "method": "GET",
+      "path": "/api/security/contacts",
+      "name": "应急联系人",
+      "payload": {
+        "zone": "string",
+        "role": "string",
+        "onDuty": "boolean"
+      }
+    },
+    {
+      "id": "audit-logs",
+      "group": "backend",
+      "method": "POST",
+      "path": "/api/security/audit-logs",
+      "name": "处置审计日志",
+      "payload": {
+        "eventId": "string",
+        "actor": "string",
+        "action": "string",
+        "payload": "object"
+      }
+    },
+    {
+      "id": "api-catalog",
+      "group": "backend",
+      "method": "GET",
+      "path": "/api/api-catalog.json",
+      "name": "接口目录",
+      "payload": {}
+    },
+    {
+      "id": "agent-vision",
+      "group": "agent",
+      "method": "POST",
+      "path": "/agents/vision-reviewer/invoke",
+      "name": "视觉复核智能体",
+      "payload": {
+        "eventId": "string",
+        "streamId": "string",
+        "frameWindow": "object",
+        "detectionBoxes": "array"
       }
     },
     {
@@ -80,18 +138,6 @@
         "event": "object",
         "sensorReadings": "array",
         "historicalContext": "object"
-      }
-    },
-    {
-      "id": "agent-vision",
-      "group": "agent",
-      "method": "POST",
-      "path": "/agents/vision-reviewer/invoke",
-      "name": "视觉复核智能体",
-      "payload": {
-        "streamId": "string",
-        "frameWindow": "object",
-        "detectionBoxes": "array"
       }
     },
     {

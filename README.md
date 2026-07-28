@@ -9,6 +9,7 @@
 - 监控视频流配置页预留
 - 后端 API 接入点预留
 - 智能体 API 接入点预留
+- 接口模拟中心：请求 JSON、响应 JSON、字段说明、状态码和调用链路
 - 统计分析与手机值班端原型
 
 ## 运行
@@ -44,3 +45,11 @@ STREAM_ID=cam-a01
 npm test
 npm run build
 ```
+
+## 接口交付
+
+接口页读取 `public/api/api-mocks.json`，这份文件就是当前前端使用到的完整接口契约。后端实现时可以优先参考：
+
+- `public/api/api-mocks.json`：完整接口模拟契约
+- `public/api/api-catalog.json`：配置页使用的接口简表
+- `docs/api-contract.md`：字段说明和联调约定

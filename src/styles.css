@@ -146,8 +146,8 @@ code {
 
 .view-tabs {
   display: grid;
-  width: min(100%, 236px);
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  width: min(100%, 304px);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
   padding: 3px;
   border: 1px solid var(--hairline);
@@ -180,6 +180,7 @@ code {
 .form-actions button {
   border-color: var(--hairline);
   background: #ffffff;
+  text-decoration: none;
 }
 
 .operator {
@@ -1011,6 +1012,217 @@ code {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+.api-workspace {
+  display: grid;
+  grid-template-columns: minmax(280px, 330px) minmax(560px, 1fr) minmax(260px, 320px);
+  gap: 12px;
+  align-items: start;
+}
+
+.interfaces-page .readiness-strip {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.api-sidebar,
+.api-flow-panel {
+  position: sticky;
+  top: 78px;
+}
+
+.api-group {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  border-bottom: 1px solid var(--hairline-2);
+}
+
+.api-group:last-child {
+  border-bottom: 0;
+}
+
+.api-group > b {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.api-contract-row {
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 9px;
+  border: 1px solid var(--hairline-2);
+  border-radius: 7px;
+  background: #ffffff;
+  color: var(--text);
+  text-align: left;
+}
+
+.api-contract-row.active {
+  border-color: #b9d2f7;
+  background: #f5f9ff;
+}
+
+.api-contract-row strong,
+.api-contract-row small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.api-contract-row strong {
+  font-size: 12px;
+}
+
+.api-contract-row small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.method-chip {
+  display: inline-flex;
+  min-width: 48px;
+  min-height: 24px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #c9d8eb;
+  border-radius: 999px;
+  background: #f5f9ff;
+  color: var(--blue);
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.method-chip.post {
+  border-color: #cfe8dc;
+  background: #f2fbf6;
+  color: var(--green);
+}
+
+.method-chip.get-put {
+  border-color: #f1dcae;
+  background: #fff9ec;
+  color: var(--amber);
+}
+
+.api-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-bottom: 1px solid var(--hairline-2);
+  background: #fbfcfe;
+}
+
+.api-heading code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.api-meta-grid {
+  display: grid;
+  grid-template-columns: 110px 110px minmax(0, 1fr);
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px solid var(--hairline-2);
+}
+
+.api-meta-grid div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.api-meta-grid span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.api-meta-grid strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.api-json-grid,
+.api-table-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid var(--hairline-2);
+}
+
+.api-json-grid h2,
+.api-table-grid h2 {
+  margin: 0 0 8px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.api-json-grid pre {
+  min-height: 280px;
+  max-height: 420px;
+  margin: 0;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid var(--hairline-2);
+  border-radius: 8px;
+  background: #0f1720;
+  color: #d8e7f3;
+  font-size: 11px;
+  line-height: 1.58;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.api-field-row {
+  margin: 8px 0;
+}
+
+.api-field-row b {
+  max-width: 180px;
+  text-align: right;
+}
+
+.api-flow {
+  padding: 12px;
+  border-bottom: 1px solid var(--hairline-2);
+}
+
+.api-flow:last-child {
+  border-bottom: 0;
+}
+
+.api-flow > strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.api-flow ol {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 @media (max-width: 900px) {
   body {
     min-width: 0;
@@ -1060,8 +1272,26 @@ code {
   .command-workspace,
   .analysis-grid,
   .config-grid,
-  .readiness-strip {
+  .readiness-strip,
+  .api-workspace,
+  .api-json-grid,
+  .api-table-grid,
+  .api-meta-grid {
     grid-template-columns: 1fr;
+  }
+
+  .api-sidebar,
+  .api-flow-panel {
+    position: static;
+  }
+
+  .interfaces-page .readiness-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .api-json-grid pre {
+    min-height: 220px;
+    max-height: 360px;
   }
 
   .situation-panel {

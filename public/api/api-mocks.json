@@ -1,0 +1,442 @@
+{
+  "version": "2026-07-28-v1",
+  "updatedAt": "2026-07-28 17:10:00",
+  "summary": {
+    "total": 13,
+    "backend": 10,
+    "agent": 3,
+    "purpose": "前端原型接口模拟契约，后端按此 JSON 字段返回即可替换本地 mock。"
+  },
+  "flows": [
+    {
+      "id": "flow-live-command",
+      "name": "实时指挥看板",
+      "steps": [
+        "读取看板数据",
+        "读取视频流配置",
+        "接收 AI 设备事件",
+        "调用智能体复核",
+        "下发物联指令",
+        "创建通知任务",
+        "写入审计日志"
+      ]
+    },
+    {
+      "id": "flow-api-handover",
+      "name": "后端接口交付",
+      "steps": [
+        "后端确认接口路径",
+        "按 requestExample 接收入参",
+        "按 responseExample 返回字段",
+        "替换 public/api mock 地址",
+        "前端移除本地兜底数据"
+      ]
+    }
+  ],
+  "interfaces": [
+    {
+      "id": "dashboard-overview",
+      "group": "backend",
+      "domain": "dashboard",
+      "method": "GET",
+      "path": "/api/dashboard.json",
+      "name": "指挥看板汇总",
+      "usedBy": ["指挥页", "分析页", "手机值班页"],
+      "description": "返回值班信息、事件队列、AI 研判、识别信号、物联联动、人员通知等看板核心数据。",
+      "query": {
+        "zone": "A区",
+        "from": "2026-07-28 00:00:00",
+        "to": "2026-07-28 23:59:59"
+      },
+      "requestExample": {},
+      "responseExample": {
+        "operator": { "name": "李明", "role": "值班主管", "time": "14:42:26" },
+        "stages": ["设备上报", "AI 复核", "风险决策", "联动执行", "复查闭环"],
+        "incidents": [
+          {
+            "id": "INC-20260728-001",
+            "title": "A区入口摄像头在线",
+            "cameraId": "CAM-A01",
+            "severity": "normal",
+            "confidence": 97.4,
+            "stage": 4,
+            "detections": [{ "label": "实时视频流", "confidence": 100 }],
+            "linkage": [{ "name": "视频网关", "target": "CAM-A01", "status": "done" }],
+            "contacts": [{ "name": "李明", "channel": "App", "status": "pending" }]
+          }
+        ]
+      },
+      "statusCodes": [
+        { "code": 200, "meaning": "查询成功" },
+        { "code": 500, "meaning": "看板聚合失败" }
+      ],
+      "fields": [
+        { "name": "operator", "type": "object", "required": true, "note": "当前值班人员" },
+        { "name": "incidents", "type": "array", "required": true, "note": "事件队列" },
+        { "name": "incidents[].stage", "type": "number", "required": true, "note": "对应 stages 下标" }
+      ]
+    },
+    {
+      "id": "video-streams",
+      "group": "backend",
+      "domain": "video",
+      "method": "GET",
+      "path": "/api/video-streams.json",
+      "name": "视频流配置",
+      "usedBy": ["指挥页视频播放器", "配置页视频流列表"],
+      "description": "返回摄像头接入、播放协议、播放地址、快照地址和启用状态。浏览器播放 RTSP 时需要后端转成 HLS/FLV/WebRTC。",
+      "query": { "enabledOnly": true },
+      "requestExample": {},
+      "responseExample": {
+        "streams": [
+          {
+            "id": "CAM-A01",
+            "name": "A区 1号楼大门入口",
+            "protocol": "RTSP",
+            "endpoint": "rtsp://user:******@host:554/cam/realmonitor?channel=1&subtype=0",
+            "playProtocol": "hls",
+            "playUrl": "http://127.0.0.1:5177/hls/cam-a01/index.m3u8",
+            "snapshotUrl": "http://127.0.0.1:5177/snapshot/cam-a01.jpg",
+            "status": "online",
+            "enabled": true
+          }
+        ]
+      },
+      "statusCodes": [
+        { "code": 200, "meaning": "查询成功" },
+        { "code": 401, "meaning": "视频配置无权限" }
+      ],
+      "fields": [
+        { "name": "streams[].endpoint", "type": "string", "required": true, "note": "原始流，可脱敏或返回配置引用" },
+        { "name": "streams[].playUrl", "type": "string", "required": false, "note": "浏览器可播放地址" },
+        { "name": "streams[].snapshotUrl", "type": "string", "required": false, "note": "握手前展示快照" }
+      ]
+    },
+    {
+      "id": "event-ingest",
+      "group": "backend",
+      "domain": "event",
+      "method": "POST",
+      "path": "/api/security/events/ingest",
+      "name": "AI 设备事件上报",
+      "usedBy": ["设备接入", "事件队列", "AI 复核触发"],
+      "description": "AI 摄像机或边缘盒子将识别事件推给平台，平台生成事件编号并进入研判流程。",
+      "requestExample": {
+        "deviceId": "EDGE-A01",
+        "cameraId": "CAM-A01",
+        "eventType": "person_intrusion",
+        "confidence": 91.6,
+        "frameUrl": "https://media.example.com/frame/inc-001.jpg",
+        "occurredAt": "2026-07-28 14:40:18",
+        "metadata": { "zone": "A区", "ruleId": "RULE-ENTRY-001" }
+      },
+      "responseExample": {
+        "eventId": "INC-20260728-001",
+        "accepted": true,
+        "nextAction": "agent-vision-review",
+        "createdAt": "2026-07-28 14:40:19"
+      },
+      "statusCodes": [
+        { "code": 200, "meaning": "事件接收成功" },
+        { "code": 422, "meaning": "字段缺失或置信度非法" }
+      ],
+      "fields": [
+        { "name": "deviceId", "type": "string", "required": true, "note": "AI 设备或边缘盒 ID" },
+        { "name": "eventType", "type": "string", "required": true, "note": "事件类型编码" },
+        { "name": "metadata", "type": "object", "required": false, "note": "算法规则和区域扩展信息" }
+      ]
+    },
+    {
+      "id": "event-detail",
+      "group": "backend",
+      "domain": "event",
+      "method": "GET",
+      "path": "/api/security/events/{eventId}",
+      "name": "事件详情",
+      "usedBy": ["事件详情抽屉", "复查闭环", "审计追溯"],
+      "description": "返回单个事件的完整处置链路，便于查看 AI 结果、联动日志、通知回执和人工备注。",
+      "query": { "includeLogs": true },
+      "requestExample": {},
+      "responseExample": {
+        "id": "INC-20260728-001",
+        "status": "processing",
+        "riskLevel": "normal",
+        "timeline": [
+          { "stage": "设备上报", "at": "14:40:19", "result": "received" },
+          { "stage": "AI 复核", "at": "14:40:22", "result": "waiting" }
+        ],
+        "operatorNotes": []
+      },
+      "statusCodes": [
+        { "code": 200, "meaning": "查询成功" },
+        { "code": 404, "meaning": "事件不存在" }
+      ],
+      "fields": [
+        { "name": "timeline", "type": "array", "required": true, "note": "处置过程节点" },
+        { "name": "operatorNotes", "type": "array", "required": false, "note": "人工复核记录" }
+      ]
+    },
+    {
+      "id": "agent-vision",
+      "group": "agent",
+      "domain": "agent",
+      "method": "POST",
+      "path": "/agents/vision-reviewer/invoke",
+      "name": "视觉复核智能体",
+      "usedBy": ["AI 研判", "识别与接口信号"],
+      "description": "对 AI 设备上报的截图、短视频窗口、检测框进行二次复核，输出置信度和误报判断。",
+      "requestExample": {
+        "eventId": "INC-20260728-001",
+        "streamId": "CAM-A01",
+        "frameWindow": { "beforeSeconds": 5, "afterSeconds": 10 },
+        "detectionBoxes": [{ "x": 0.42, "y": 0.31, "w": 0.18, "h": 0.36, "label": "person" }]
+      },
+      "responseExample": {
+        "reviewId": "VR-20260728-001",
+        "confidence": 92.8,
+        "falsePositive": false,
+        "labels": ["person", "restricted_area"],
+        "summary": "画面中存在人员进入受限区域，建议继续联动门禁和通知值班人员。"
+      },
+      "statusCodes": [
+        { "code": 200, "meaning": "复核完成" },
+        { "code": 202, "meaning": "异步处理中" }
+      ],
+      "fields": [
+        { "name": "detectionBoxes", "type": "array", "required": false, "note": "AI 设备原始检测框" },
+        { "name": "falsePositive", "type": "boolean", "required": true, "note": "是否误报" }
+      ]
+    },
+    {
+      "id": "agent-risk",
+      "group": "agent",
+      "domain": "agent",
+      "method": "POST",
+      "path": "/agents/risk-assessor/invoke",
+      "name": "风险研判智能体",
+      "usedBy": ["AI 研判", "联动策略"],
+      "description": "结合事件、传感器、历史告警和区域规则，输出风险等级与联动建议。",
+      "requestExample": {
+        "event": { "id": "INC-20260728-001", "type": "person_intrusion", "confidence": 91.6 },
+        "sensorReadings": [{ "sensorId": "DOOR-A01", "value": "open" }],
+        "historicalContext": { "sameZoneEvents24h": 3 }
+      },
+      "responseExample": {
+        "riskLevel": "warning",
+        "score": 78,
+        "reason": "受限区域连续出现人员进入且门禁状态打开。",
+        "recommendations": ["锁定门禁", "通知巡逻组", "拉取 30 秒视频回放"]
+      },
+      "statusCodes": [
+        { "code": 200, "meaning": "研判完成" },
+        { "code": 503, "meaning": "智能体不可用" }
+      ],
+      "fields": [
+        { "name": "riskLevel", "type": "string", "required": true, "note": "normal | warning | critical" },
+        { "name": "recommendations", "type": "array", "required": true, "note": "建议动作" }
+      ]
+    },
+    {
+      "id": "agent-plan",
+      "group": "agent",
+      "domain": "agent",
+      "method": "POST",
+      "path": "/agents/response-planner/invoke",
+      "name": "处置方案智能体",
+      "usedBy": ["建议动作", "复查闭环", "联动策略"],
+      "description": "根据风险等级、区域规则、可用设备和联系人，生成可执行处置方案。",
+      "requestExample": {
+        "riskLevel": "warning",
+        "zone": "A区",
+        "availableDevices": [
+          { "id": "DOOR-A01", "type": "access_control", "status": "online" },
+          { "id": "SPK-A01", "type": "broadcast", "status": "online" }
+        ],
+        "contacts": ["USER-001", "USER-002"]
+      },
+      "responseExample": {
+        "planId": "PLAN-20260728-001",
+        "priority": 2,
+        "actions": [
+          { "type": "iot_command", "target": "DOOR-A01", "action": "lock" },
+          { "type": "notification", "target": "USER-001", "channel": "app" }
+        ],
+        "operatorPrompt": "建议锁定 A 区入口门禁，并通知值班主管复核。"
+      },
+      "statusCodes": [
+        { "code": 200, "meaning": "方案生成成功" },
+        { "code": 409, "meaning": "可用设备不足，需要人工确认" }
+      ],
+      "fields": [
+        { "name": "availableDevices", "type": "array", "required": true, "note": "当前可联动设备" },
+        { "name": "actions", "type": "array", "required": true, "note": "生成的执行动作" }
+      ]
+    },
+    {
+      "id": "iot-command",
+      "group": "backend",
+      "domain": "iot",
+      "method": "POST",
+      "path": "/api/iot/linkage/commands",
+      "name": "物联系统联动指令",
+      "usedBy": ["物联系统联动", "联动执行阶段"],
+      "description": "向门禁、广播、照明、工单、机器人等物联系统下发动作。",
+      "requestExample": {
+        "eventId": "INC-20260728-001",
+        "commands": [
+          { "deviceType": "access_control", "targetId": "DOOR-A01", "action": "lock", "priority": 1 },
+          { "deviceType": "broadcast", "targetId": "SPK-A01", "action": "play_warning", "priority": 2 }
+        ]
+      },
+      "responseExample": {
+        "batchId": "LINK-20260728-001",
+        "accepted": 2,
+        "results": [
+          { "targetId": "DOOR-A01", "status": "running" },
+          { "targetId": "SPK-A01", "status": "queued" }
+        ]
+      },
+      "statusCodes": [
+        { "code": 200, "meaning": "指令已受理" },
+        { "code": 409, "meaning": "设备状态冲突" }
+      ],
+      "fields": [
+        { "name": "commands", "type": "array", "required": true, "note": "一组联动指令" },
+        { "name": "results[].status", "type": "string", "required": true, "note": "queued | running | done | failed" }
+      ]
+    },
+    {
+      "id": "notification-task",
+      "group": "backend",
+      "domain": "notification",
+      "method": "POST",
+      "path": "/api/notification/tasks",
+      "name": "人员通知任务",
+      "usedBy": ["人员通知", "值班端消息"],
+      "description": "创建 App、短信、电话外呼等多渠道通知任务，并跟踪回执。",
+      "requestExample": {
+        "eventId": "INC-20260728-001",
+        "recipients": ["USER-001", "USER-002"],
+        "channels": ["app", "sms"],
+        "escalationPolicy": { "timeoutSeconds": 180, "fallback": "phone_call" }
+      },
+      "responseExample": {
+        "taskId": "NTF-20260728-001",
+        "status": "running",
+        "receipts": [
+          { "recipientId": "USER-001", "channel": "app", "status": "sent" },
+          { "recipientId": "USER-002", "channel": "sms", "status": "pending" }
+        ]
+      },
+      "statusCodes": [
+        { "code": 200, "meaning": "任务创建成功" },
+        { "code": 400, "meaning": "收件人为空" }
+      ],
+      "fields": [
+        { "name": "recipients", "type": "array", "required": true, "note": "通知对象 ID" },
+        { "name": "escalationPolicy", "type": "object", "required": false, "note": "超时升级策略" }
+      ]
+    },
+    {
+      "id": "notification-receipts",
+      "group": "backend",
+      "domain": "notification",
+      "method": "GET",
+      "path": "/api/notification/tasks/{taskId}/receipts",
+      "name": "通知回执查询",
+      "usedBy": ["人员通知", "复查闭环"],
+      "description": "查询通知触达、已读、确认、失败等状态，更新看板上的人员回执。",
+      "requestExample": {},
+      "responseExample": {
+        "taskId": "NTF-20260728-001",
+        "receipts": [
+          { "recipientId": "USER-001", "name": "李明", "status": "confirmed", "confirmedAt": "14:42:10" },
+          { "recipientId": "USER-002", "name": "周倩", "status": "sent", "confirmedAt": null }
+        ]
+      },
+      "statusCodes": [
+        { "code": 200, "meaning": "查询成功" },
+        { "code": 404, "meaning": "通知任务不存在" }
+      ],
+      "fields": [
+        { "name": "receipts[].status", "type": "string", "required": true, "note": "pending | sent | read | confirmed | failed" }
+      ]
+    },
+    {
+      "id": "contacts",
+      "group": "backend",
+      "domain": "notification",
+      "method": "GET",
+      "path": "/api/security/contacts",
+      "name": "应急联系人",
+      "usedBy": ["人员通知", "联动策略", "配置页"],
+      "description": "按区域、角色、值班状态查询可通知人员。",
+      "query": { "zone": "A区", "role": "值班主管", "onDuty": true },
+      "requestExample": {},
+      "responseExample": {
+        "contacts": [
+          { "id": "USER-001", "name": "李明", "role": "值班主管", "channels": ["app", "phone"], "onDuty": true },
+          { "id": "USER-002", "name": "周倩", "role": "运维负责人", "channels": ["app", "sms"], "onDuty": true }
+        ]
+      },
+      "statusCodes": [
+        { "code": 200, "meaning": "查询成功" }
+      ],
+      "fields": [
+        { "name": "contacts[].channels", "type": "array", "required": true, "note": "可用通知渠道" }
+      ]
+    },
+    {
+      "id": "audit-logs",
+      "group": "backend",
+      "domain": "audit",
+      "method": "POST",
+      "path": "/api/security/audit-logs",
+      "name": "处置审计日志",
+      "usedBy": ["所有关键操作", "复查闭环"],
+      "description": "记录事件接入、AI 研判、联动下发、通知触达、人工确认等关键动作。",
+      "requestExample": {
+        "eventId": "INC-20260728-001",
+        "actor": "system",
+        "action": "linkage.command.created",
+        "target": "LINK-20260728-001",
+        "payload": { "commandCount": 2 }
+      },
+      "responseExample": {
+        "logId": "AUD-20260728-001",
+        "stored": true,
+        "createdAt": "2026-07-28 14:42:30"
+      },
+      "statusCodes": [
+        { "code": 200, "meaning": "写入成功" }
+      ],
+      "fields": [
+        { "name": "actor", "type": "string", "required": true, "note": "system 或用户 ID" },
+        { "name": "action", "type": "string", "required": true, "note": "动作编码" }
+      ]
+    },
+    {
+      "id": "api-catalog",
+      "group": "backend",
+      "domain": "governance",
+      "method": "GET",
+      "path": "/api/api-catalog.json",
+      "name": "接口目录",
+      "usedBy": ["配置页", "接口页"],
+      "description": "返回后端接口和智能体接口简表，供配置页维护和接口页索引。",
+      "requestExample": {},
+      "responseExample": {
+        "apis": [
+          { "id": "event-ingest", "group": "backend", "method": "POST", "path": "/api/security/events/ingest", "name": "AI 设备事件上报" }
+        ]
+      },
+      "statusCodes": [
+        { "code": 200, "meaning": "查询成功" }
+      ],
+      "fields": [
+        { "name": "apis[].group", "type": "string", "required": true, "note": "backend | agent" },
+        { "name": "apis[].payload", "type": "object|string", "required": false, "note": "字段模板" }
+      ]
+    }
+  ]
+}
