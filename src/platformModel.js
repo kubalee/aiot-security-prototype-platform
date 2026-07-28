@@ -1,3 +1,5 @@
+const primaryRtspEndpoint = import.meta.env?.VITE_PRIMARY_RTSP_URL || 'rtsp://stream.example.local/a-zone/gate-main';
+
 export const stages = ['设备上报', 'AI 复核', '风险决策', '联动执行', '复查闭环'];
 
 export const events = [
@@ -163,7 +165,7 @@ export const videoStreams = [
     name: 'A区 1号楼大门入口',
     zone: 'A区',
     protocol: 'RTSP',
-    endpoint: 'rtsp://stream.example.local/a-zone/gate-main',
+    endpoint: primaryRtspEndpoint,
     status: 'online',
     priority: 1,
     enabled: true,

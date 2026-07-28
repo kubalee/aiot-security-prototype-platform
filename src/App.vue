@@ -15,6 +15,7 @@ import {
 
 const storageKeys = {
   streams: 'aiot-security.streams',
+  streamsVersion: 'aiot-security.streams.version',
   apis: 'aiot-security.apis',
 };
 
@@ -31,11 +32,29 @@ function readStorage(key, fallback) {
   }
 }
 
+function readConfiguredStreams() {
+  const streams = readStorage(storageKeys.streams, videoStreams);
+  const primaryStream = videoStreams.find((stream) => stream.id === 'CAM-A01');
+  if (!primaryStream) return streams;
+
+  const appliedVersion = window.localStorage.getItem(storageKeys.streamsVersion);
+  if (appliedVersion === primaryStream.endpoint) return streams;
+
+  const mergedStreams = upsertById(streams, {
+    ...primaryStream,
+    enabled: true,
+    status: 'online',
+  });
+  window.localStorage.setItem(storageKeys.streamsVersion, primaryStream.endpoint);
+  window.localStorage.setItem(storageKeys.streams, JSON.stringify(mergedStreams));
+  return mergedStreams;
+}
+
 const initialView = new URLSearchParams(window.location.search).get('view');
 const view = ref(['command', 'analytics', 'config'].includes(initialView) ? initialView : 'command');
 const activeEventId = ref(events[0].id);
 const activeStreamId = ref(events[0].cameraId);
-const configuredStreams = ref(readStorage(storageKeys.streams, videoStreams));
+const configuredStreams = ref(readConfiguredStreams());
 const configuredApis = ref(readStorage(storageKeys.apis, apiCatalog));
 const editingStreamId = ref('');
 const editingApiId = ref('');
@@ -181,6 +200,7 @@ function deleteApi(id) {
 function restoreDefaults() {
   configuredStreams.value = clone(videoStreams);
   configuredApis.value = clone(apiCatalog);
+  window.localStorage.setItem(storageKeys.streamsVersion, videoStreams.find((stream) => stream.id === 'CAM-A01')?.endpoint || '');
   resetStreamForm();
   resetApiForm();
 }

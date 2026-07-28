@@ -18,6 +18,16 @@ npm install
 npm run dev
 ```
 
+## 本地视频流配置
+
+真实 RTSP 地址放在 `.env.local` 中：
+
+```bash
+VITE_PRIMARY_RTSP_URL=rtsp://user:password@host:554/cam/realmonitor?channel=1&subtype=0
+```
+
+`.env.local` 不会提交到 Git，避免把摄像头账号密码推到公开仓库。
+
 ## 验证
 
 ```bash
