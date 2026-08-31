@@ -56,4 +56,4 @@ npm run build
 
 ## 产品文档
 
-- `docs/product-document.md`：产品定位、用户角色、业务流程、页面范围、交互说明、数据对象、权限和验收标准
+- `docs/product-document.md`：面向讲解和汇报的产品说明文档，说明系统解决什么问题、怎么使用、怎么演示
