@@ -53,3 +53,7 @@ npm run build
 - `public/api/api-mocks.json`：完整接口模拟契约
 - `public/api/api-catalog.json`：配置页使用的接口简表
 - `docs/api-contract.md`：字段说明和联调约定
+
+## 产品文档
+
+- `docs/product-document.md`：产品定位、用户角色、业务流程、页面范围、交互说明、数据对象、权限和验收标准
