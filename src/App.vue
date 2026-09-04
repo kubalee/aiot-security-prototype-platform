@@ -2,15 +2,22 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import StreamPlayer from './StreamPlayer.vue';
 import {
+  adaptKunyunAlarmsToEvents,
+  adaptKunyunCamerasToStreams,
+  getKunyunApiCatalog,
+  getKunyunInterfaceContracts,
   getApiGroups,
   getEventStream,
   getLiveStreams,
   getPlatformMetrics,
+  normalizeKunyunPage,
   removeById,
   upsertById,
 } from './platformModel.js';
 
-const dataVersion = '2026-07-28-live-json-v4';
+const dataVersion = '2026-09-04-kunyun-backend-v1';
+const kunyunApiBase = import.meta.env?.VITE_KUNYUN_API_BASE || '/kunyun-api';
+const kunyunToken = import.meta.env?.VITE_KUNYUN_TOKEN || '';
 const storageKeys = {
   streams: 'aiot-security.streams.playback.v1',
   apis: 'aiot-security.apis',
@@ -75,6 +82,74 @@ async function fetchJson(path, fallback) {
   }
 }
 
+function getStoredToken() {
+  if (kunyunToken) return kunyunToken;
+  const keys = ['Admin-Token', 'Authorization', 'token', 'kunyun-token'];
+  for (const key of keys) {
+    const value = window.localStorage.getItem(key) || window.sessionStorage.getItem(key);
+    if (value) return value.replace(/^Bearer\s+/i, '');
+  }
+  return '';
+}
+
+async function requestKunyun(path, options = {}) {
+  const token = getStoredToken();
+  const headers = {
+    Accept: 'application/json',
+    ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...options.headers,
+  };
+  const response = await fetch(`${kunyunApiBase}${path}`, {
+    cache: 'no-store',
+    ...options,
+    headers,
+  });
+  const text = await response.text();
+  const payload = text ? JSON.parse(text) : {};
+  if (!response.ok || payload.code === 401) {
+    throw new Error(payload.msg || `后端接口 ${response.status}`);
+  }
+  return payload;
+}
+
+function updateBackendStatus(results) {
+  const successCount = results.filter((item) => item.status === 'fulfilled').length;
+  const firstError = results.find((item) => item.status === 'rejected')?.reason;
+  backendStatus.value = {
+    mode: successCount ? 'live' : 'mock',
+    message: successCount
+      ? `已连接后端接口：${successCount}/${results.length}`
+      : `后端接口待登录或不可用：${firstError?.message || '使用原型数据'}`,
+    checkedAt: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+  };
+}
+
+async function loadKunyunData(localDashboard, localStreams) {
+  const dateQuery = `days=7&endTime=${encodeURIComponent(new Date().toISOString().slice(0, 19).replace('T', ' '))}`;
+  const requests = await Promise.allSettled([
+    requestKunyun(`/usm/v1/dashboard/overview?${dateQuery}`),
+    requestKunyun('/usm/v1/alarm/list?pageNum=1&pageSize=20'),
+    requestKunyun('/usm/v1/camera/list?pageNum=1&pageSize=20'),
+    requestKunyun(`/usm/v1/dashboard/alarm/trend?${dateQuery}`),
+  ]);
+  updateBackendStatus(requests);
+
+  const alarmRows = requests[1].status === 'fulfilled' ? normalizeKunyunPage(requests[1].value).rows : [];
+  const cameraRows = requests[2].status === 'fulfilled' ? normalizeKunyunPage(requests[2].value).rows : [];
+  const incidentsFromBackend = adaptKunyunAlarmsToEvents(alarmRows);
+  const streamsFromBackend = adaptKunyunCamerasToStreams(cameraRows);
+
+  return {
+    operator: localDashboard.operator || operator.value,
+    stages: localDashboard.stages || [],
+    incidents: incidentsFromBackend.length ? incidentsFromBackend : localDashboard.incidents || [],
+    streams: streamsFromBackend.length ? streamsFromBackend : localStreams.streams || [],
+    apis: getKunyunApiCatalog(),
+    interfacePayload: getKunyunInterfaceContracts(),
+  };
+}
+
 function mergeLocalPrimaryStream(streams) {
   const envEndpoint = import.meta.env?.VITE_PRIMARY_RTSP_URL || '';
   const envPlayUrl = import.meta.env?.VITE_PRIMARY_PLAY_URL || 'http://127.0.0.1:5177/hls/cam-a01/index.m3u8';
@@ -111,6 +186,11 @@ const apiMockPayload = ref({ interfaces: [], flows: [], summary: {} });
 const activeInterfaceId = ref('');
 const activityLog = ref([]);
 const analyticsFilter = ref({ type: 'all', value: '全部事件' });
+const backendStatus = ref({
+  mode: 'mock',
+  message: '正在连接后端接口',
+  checkedAt: '',
+});
 
 const streamForm = reactive({
   id: '',
@@ -346,13 +426,52 @@ function patchActiveEvent(updater) {
   incidents.value = incidents.value.map((event) => (event.id === nextEvent.id ? nextEvent : event));
 }
 
-function runRecommendation(item, index) {
+function buildAlarmActionPayload(event, overrides = {}) {
+  const backendId = Number(event.backendId || event.raw?.id);
+  return {
+    alarm_ids: Number.isFinite(backendId) ? [backendId] : [],
+    alarm_uuids: [String(event.alarmUuid || event.id)].filter(Boolean),
+    ...overrides,
+  };
+}
+
+async function syncAlarmAction(path, body, successText) {
+  try {
+    await requestKunyun(path, {
+      method: path.includes('/notify/retry') ? 'POST' : 'PUT',
+      body: JSON.stringify(body),
+    });
+    pushActivity(`后端成功：${successText}`);
+  } catch (error) {
+    pushActivity(`后端待处理：${error.message}`);
+  }
+}
+
+async function syncDeviceTrigger(item) {
+  try {
+    await requestKunyun('/usm/v1/device/trigger', {
+      method: 'POST',
+      body: JSON.stringify({ device_id: item.target, action: item.name }),
+    });
+    pushActivity(`后端成功：设备联动 ${item.target}`);
+  } catch (error) {
+    pushActivity(`后端待处理：${error.message}`);
+  }
+}
+
+async function runRecommendation(item, index) {
   patchActiveEvent((event) => {
     event.stage = Math.max(event.stage || 0, Math.min(4, index + 1));
     event.progress = Math.max(event.progress || 0, Math.min(100, 45 + (index + 1) * 12));
     event.aiDecision = `已执行建议动作「${item}」。系统将该动作写入处置链路，并等待后端接口回传真实执行结果。`;
   });
   pushActivity(`执行建议动作：${item}`);
+  if (index >= 2) {
+    await syncAlarmAction('/usm/v1/alarm/handle', buildAlarmActionPayload(activeEvent.value, {
+      handle_status: '1',
+      remark: `前端执行建议动作：${item}`,
+    }), '处理告警');
+  }
 }
 
 function advanceStage(index) {
@@ -368,7 +487,7 @@ function advanceStage(index) {
   pushActivity(`切换处置阶段：${stages.value[index]}`);
 }
 
-function triggerLinkage(item) {
+async function triggerLinkage(item) {
   patchActiveEvent((event) => {
     event.stage = Math.max(event.stage || 0, 3);
     event.linkage = (event.linkage || []).map((entry) => (
@@ -378,9 +497,10 @@ function triggerLinkage(item) {
     ));
   });
   pushActivity(`下发物联动作：${item.name} / ${item.target}`);
+  await syncDeviceTrigger(item);
 }
 
-function triggerContact(item) {
+async function triggerContact(item) {
   patchActiveEvent((event) => {
     event.contacts = (event.contacts || []).map((entry) => (
       entry.name === item.name && entry.channel === item.channel
@@ -389,9 +509,12 @@ function triggerContact(item) {
     ));
   });
   pushActivity(`发送人员通知：${item.name} / ${item.channel}`);
+  await syncAlarmAction('/usm/v1/alarm/notify/retry', buildAlarmActionPayload(activeEvent.value, {
+    remark: `前端通知：${item.name} / ${item.channel}`,
+  }), '发送或重试通知');
 }
 
-function closeIncident() {
+async function closeIncident() {
   patchActiveEvent((event) => {
     event.stage = stages.value.length - 1;
     event.progress = 100;
@@ -402,6 +525,11 @@ function closeIncident() {
     event.aiDecision = '人工已确认本次处置闭环。联动、通知、审计日志均已进入后端接口模拟链路。';
   });
   pushActivity(`闭环事件：${activeEvent.value.id}`);
+  await syncAlarmAction('/usm/v1/alarm/archive', buildAlarmActionPayload(activeEvent.value, {
+    archive_status: '1',
+    handle_status: '1',
+    remark: '前端确认闭环并归档',
+  }), '归档告警');
 }
 
 function setAnalyticsFilter(type, value = 'all', label = '全部事件') {
@@ -424,20 +552,21 @@ async function loadPageData() {
     fetchJson('/api/api-catalog.json', { apis: [] }),
     fetchJson('/api/api-mocks.json', { interfaces: [], flows: [], summary: {} }),
   ]);
+  const livePayload = await loadKunyunData(dashboard, streamPayload);
 
-  operator.value = dashboard.operator || operator.value;
-  stages.value = dashboard.stages || [];
-  incidents.value = dashboard.incidents || [];
+  operator.value = livePayload.operator || operator.value;
+  stages.value = livePayload.stages || [];
+  incidents.value = livePayload.incidents || [];
 
-  const apiStreams = mergeLocalPrimaryStream(streamPayload.streams || []);
+  const apiStreams = mergeLocalPrimaryStream(livePayload.streams || []);
   const storedStreams = readStorage(storageKeys.streams, apiStreams).map(normalizeStream);
-  const storedApis = readStorage(storageKeys.apis, apiPayload.apis || []);
+  const storedApis = readStorage(storageKeys.apis, livePayload.apis || apiPayload.apis || []);
   configuredStreams.value = mergeLocalPrimaryStream(storedStreams.length ? storedStreams : apiStreams);
-  configuredApis.value = storedApis.length ? storedApis : apiPayload.apis || [];
-  apiMockPayload.value = mockPayload;
+  configuredApis.value = storedApis.length ? storedApis : livePayload.apis || apiPayload.apis || [];
+  apiMockPayload.value = livePayload.interfacePayload || mockPayload;
   activeEventId.value = incidents.value[0]?.id || '';
   activeStreamId.value = incidents.value[0]?.cameraId || configuredStreams.value[0]?.id || '';
-  activeInterfaceId.value = mockPayload.interfaces?.[0]?.id || '';
+  activeInterfaceId.value = apiMockPayload.value.interfaces?.[0]?.id || '';
   resetStreamForm();
   resetApiForm();
   loading.value = false;
@@ -458,7 +587,7 @@ onMounted(loadPageData);
       </div>
 
       <div class="live-badge">
-        <span></span>{{ loading ? '正在读取本地 JSON 接口' : `${metrics.totalEvents} 条事件 · ${metrics.liveStreams} 路视频 · ${metrics.apiReserved} 个接口` }}
+        <span></span>{{ loading ? '正在连接后端接口' : `${backendStatus.message} · ${metrics.totalEvents} 条事件 · ${metrics.liveStreams} 路视频` }}
       </div>
 
       <nav class="view-tabs" aria-label="页面切换">
@@ -475,7 +604,7 @@ onMounted(loadPageData);
       </div>
     </header>
 
-    <section v-if="loading" class="panel loading-panel">正在加载 /api/dashboard.json、/api/video-streams.json、/api/api-catalog.json...</section>
+    <section v-if="loading" class="panel loading-panel">正在加载本地原型数据，并尝试连接 Kunyun 后端接口...</section>
 
     <main v-if="!loading && view === 'command'" class="command-workspace minimal-workspace">
       <div class="ambient-grid" aria-hidden="true"></div>
@@ -678,8 +807,8 @@ onMounted(loadPageData);
       <section class="page-intro interface-intro">
         <div>
           <span>API MOCK CENTER</span>
-          <h1>接口模拟与后端契约</h1>
-          <p>当前没有真实接口时，前端读取 `public/api/api-mocks.json`。后端后续按这里的路径、入参和返回字段实现即可。</p>
+          <h1>Kunyun 后端接口</h1>
+          <p>当前接口页已按你提供的 Swagger 整理，前端会优先请求真实后端；没有令牌或接口不可用时，继续用原型数据展示。</p>
         </div>
         <a class="ghost-button" href="/api/api-mocks.json" target="_blank" rel="noreferrer">查看原始 JSON</a>
       </section>
@@ -790,7 +919,7 @@ onMounted(loadPageData);
         <div>
           <span>INTEGRATION GOVERNANCE</span>
           <h1>接入治理与接口预留</h1>
-          <p>页面内容由 `public/api` 的 JSON 驱动；后端按同样字段返回即可替换成本地接口。</p>
+          <p>页面已预置 Kunyun 告警、摄像头、视频流、设备联动和通知接口，也支持继续维护本地演示配置。</p>
         </div>
         <button class="ghost-button" @click="restoreDefaults">恢复默认配置</button>
       </section>

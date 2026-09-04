@@ -24,6 +24,30 @@ npm run dev
 - Vue 前端：`http://127.0.0.1:5176/` 或 Vite 自动分配端口
 - 本地转流服务：`http://127.0.0.1:5177/`
 
+## 后端接口配置
+
+前端已接入 Kunyun 后端 Swagger 中的 USM 告警、数据大屏、摄像头、视频流、设备联动和通知接口。
+
+本地开发默认通过 Vite 代理访问：
+
+```bash
+VITE_KUNYUN_API_BASE=/kunyun-api
+```
+
+代理会把 `/kunyun-api/usm/v1/alarm/list` 转发到：
+
+```bash
+http://43.180.203.3:9090/kunyun/usm/v1/alarm/list
+```
+
+如果接口需要登录令牌，可以在 `.env.local` 里配置：
+
+```bash
+VITE_KUNYUN_TOKEN=your-login-token
+```
+
+未配置令牌时，页面会提示“令牌不能为空”，并继续使用原型数据兜底展示。
+
 ## 本地视频流配置
 
 真实 RTSP 地址放在 `.env.local` 中：

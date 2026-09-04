@@ -3,12 +3,16 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
+  adaptKunyunAlarmsToEvents,
   apiCatalog,
   events,
   getApiGroups,
   getEventStream,
+  getKunyunApiCatalog,
+  getKunyunInterfaceContracts,
   getLiveStreams,
   getPlatformMetrics,
+  normalizeKunyunPage,
   removeById,
   upsertById,
   videoStreams,
@@ -97,4 +101,45 @@ test('api mock contracts cover every catalog endpoint used by the prototype', ()
     assert.ok(Array.isArray(item.fields), `${item.id} fields must be documented`);
     assert.ok(Array.isArray(item.statusCodes), `${item.id} statusCodes must be documented`);
   }
+});
+
+test('kunyun swagger catalog covers alarm, dashboard, camera, linkage, and agent APIs', () => {
+  const catalog = getKunyunApiCatalog();
+  const groups = getApiGroups(catalog);
+  const contracts = getKunyunInterfaceContracts(catalog);
+
+  assert.ok(catalog.some((api) => api.path === '/usm/v1/alarm/archive' && api.method === 'PUT'));
+  assert.ok(catalog.some((api) => api.path === '/usm/v1/dashboard/overview'));
+  assert.ok(catalog.some((api) => api.path === '/usm/v1/camera/list'));
+  assert.ok(catalog.some((api) => api.path === '/usm/v1/device/trigger'));
+  assert.ok(groups.backend.length > groups.agent.length);
+  assert.equal(contracts.summary.total, catalog.length);
+  assert.equal(contracts.interfaces.length, catalog.length);
+});
+
+test('kunyun page and alarm adapters tolerate common backend response shapes', () => {
+  const page = normalizeKunyunPage({
+    code: 200,
+    data: {
+      records: [
+        {
+          id: 1001,
+          alarmUuid: 'ALM-001',
+          alarmType: '人员闯入',
+          cameraId: 'CAM-A01',
+          cameraName: 'A区入口',
+          degree: 'warning',
+          handleStatus: '0',
+        },
+      ],
+      total: 1,
+    },
+  });
+  const eventsFromBackend = adaptKunyunAlarmsToEvents(page.rows);
+
+  assert.equal(page.total, 1);
+  assert.equal(eventsFromBackend[0].id, 'ALM-001');
+  assert.equal(eventsFromBackend[0].cameraId, 'CAM-A01');
+  assert.equal(eventsFromBackend[0].severity, 'warning');
+  assert.equal(eventsFromBackend[0].linkage[0].label, '待处理');
 });

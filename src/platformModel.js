@@ -250,6 +250,214 @@ export const apiCatalog = [
   { id: 'agent-summary', group: 'agent', method: 'POST', path: '/agents/incident-summarizer/invoke', name: '事件总结智能体', payload: 'eventTimeline, linkageLogs, operatorNotes' },
 ];
 
+export const kunyunApiCatalog = [
+  { id: 'kunyun-dashboard-overview', group: 'backend', method: 'GET', path: '/usm/v1/dashboard/overview', name: '数据大屏总览', payload: 'beginTime, endTime, days, deptId' },
+  { id: 'kunyun-dashboard-latest', group: 'backend', method: 'GET', path: '/usm/v1/dashboard/alarm/latest', name: '最新告警', payload: 'beginTime, endTime, days, deptId' },
+  { id: 'kunyun-dashboard-trend', group: 'backend', method: 'GET', path: '/usm/v1/dashboard/alarm/trend', name: '告警趋势', payload: 'beginTime, endTime, days, deptId' },
+  { id: 'kunyun-dashboard-distribution', group: 'backend', method: 'GET', path: '/usm/v1/dashboard/alarm/distribution', name: '告警分布', payload: 'beginTime, endTime, days, deptId' },
+  { id: 'kunyun-camera-status', group: 'backend', method: 'GET', path: '/usm/v1/dashboard/camera/status', name: '摄像头状态统计', payload: 'beginTime, endTime, days, deptId' },
+  { id: 'kunyun-alarm-list', group: 'backend', method: 'GET', path: '/usm/v1/alarm/list', name: '分页查询告警', payload: 'pageNum, pageSize, alarmType, degree, handleStatus, archiveStatus, cameraId' },
+  { id: 'kunyun-alarm-detail', group: 'backend', method: 'GET', path: '/usm/v1/alarm/{alarmId}', name: '告警详情', payload: 'alarmId' },
+  { id: 'kunyun-alarm-receive', group: 'backend', method: 'POST', path: '/usm/v1/alarm/receive', name: '接收告警', payload: 'camera_id, camera_name, alarm_pic_url, alarm_type, degree, stream_url, timestamp' },
+  { id: 'kunyun-alarm-handle', group: 'backend', method: 'PUT', path: '/usm/v1/alarm/handle', name: '处理告警', payload: 'alarm_ids, alarm_uuids, handle_status, remark' },
+  { id: 'kunyun-alarm-archive', group: 'backend', method: 'PUT', path: '/usm/v1/alarm/archive', name: '归档告警', payload: 'alarm_ids, alarm_uuids, archive_status, remark' },
+  { id: 'kunyun-alarm-remark', group: 'backend', method: 'PUT', path: '/usm/v1/alarm/remark', name: '备注告警', payload: 'alarm_ids, alarm_uuids, remark' },
+  { id: 'kunyun-notify-list', group: 'backend', method: 'GET', path: '/usm/v1/alarm/notify/list', name: '通知列表', payload: 'alarmId, alarmUuid, status, receiver, channel' },
+  { id: 'kunyun-notify-retry', group: 'backend', method: 'POST', path: '/usm/v1/alarm/notify/retry', name: '重试通知', payload: 'alarm_ids, alarm_uuids, remark' },
+  { id: 'kunyun-camera-list', group: 'backend', method: 'GET', path: '/usm/v1/camera/list', name: '分页查询摄像头', payload: 'pageNum, pageSize, cameraId, cameraName, onlineStatus, groupUuid' },
+  { id: 'kunyun-stream-play-url', group: 'backend', method: 'GET', path: '/usm/v1/stream/play_url', name: '获取网页播放地址', payload: 'camera_id' },
+  { id: 'kunyun-stream-camera-play', group: 'backend', method: 'GET', path: '/usm/v1/stream/camera_play', name: '播放摄像头', payload: 'camera_id' },
+  { id: 'kunyun-device-linkage', group: 'backend', method: 'GET', path: '/usm/v1/device/linkage', name: '可联动设备', payload: '' },
+  { id: 'kunyun-device-trigger', group: 'backend', method: 'POST', path: '/usm/v1/device/trigger', name: '触发设备联动', payload: 'device_id, action' },
+  { id: 'kunyun-agent-analyze', group: 'agent', method: 'POST', path: '/usm/v1/agent/analyze', name: 'AI 分析告警', payload: 'alarm_id, alarm_uuid, context' },
+  { id: 'kunyun-agent-actions', group: 'agent', method: 'POST', path: '/usm/v1/agent/actions/execute', name: '执行 AI 建议动作', payload: 'alarm_id, actions' },
+  { id: 'kunyun-agent-notify', group: 'agent', method: 'POST', path: '/usm/v1/agent/notifications/send', name: '发送 AI 通知', payload: 'alarm_id, receivers, channels' },
+];
+
+const severityRank = {
+  critical: 3,
+  danger: 3,
+  high: 3,
+  '3': 3,
+  warning: 2,
+  medium: 2,
+  '2': 2,
+  normal: 1,
+  low: 1,
+  '1': 1,
+};
+
+function pickFirst(...values) {
+  return values.find((value) => value !== undefined && value !== null && value !== '');
+}
+
+function normalizeRows(payload) {
+  const data = payload?.data ?? payload;
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.records)) return data.records;
+  if (Array.isArray(data?.rows)) return data.rows;
+  if (Array.isArray(data?.list)) return data.list;
+  if (Array.isArray(payload?.rows)) return payload.rows;
+  return [];
+}
+
+function normalizeTotal(payload, rows) {
+  const data = payload?.data ?? payload;
+  return Number(pickFirst(data?.total, payload?.total, rows.length, 0));
+}
+
+export function normalizeKunyunPage(payload) {
+  const rows = normalizeRows(payload);
+  return { rows, total: normalizeTotal(payload, rows) };
+}
+
+export function unwrapKunyunResponse(payload) {
+  return payload?.data ?? payload?.rows ?? payload;
+}
+
+export function getKunyunApiCatalog() {
+  return kunyunApiCatalog;
+}
+
+export function getKunyunInterfaceContracts(catalog = kunyunApiCatalog) {
+  return {
+    version: 'kunyun-swagger-2026-09-04',
+    updatedAt: '2026-09-04 00:00:00',
+    summary: {
+      total: catalog.length,
+      backend: catalog.filter((item) => item.group === 'backend').length,
+      agent: catalog.filter((item) => item.group === 'agent').length,
+      purpose: '根据 community-kunyun Swagger 接口整理，前端可通过 VITE_KUNYUN_API_BASE 接入真实后端。',
+    },
+    flows: [
+      {
+        id: 'kunyun-live-command',
+        name: '真实告警处置',
+        steps: ['读取大屏总览', '读取告警列表', '读取摄像头列表', '获取播放地址', '处理告警', '触发设备联动', '归档告警'],
+      },
+      {
+        id: 'kunyun-notification',
+        name: '通知和复核',
+        steps: ['读取通知列表', '发送或重试通知', '备注告警', 'AI 分析告警', '执行 AI 建议动作'],
+      },
+    ],
+    interfaces: catalog.map((api) => ({
+      ...api,
+      domain: api.path.includes('/dashboard/') ? 'dashboard'
+        : api.path.includes('/alarm/') || api.path.endsWith('/alarm') ? 'alarm'
+          : api.path.includes('/camera') || api.path.includes('/stream') ? 'video'
+            : api.path.includes('/device') ? 'iot'
+              : api.path.includes('/agent') ? 'agent'
+                : 'backend',
+      usedBy: api.path.includes('/dashboard/') ? ['分析页', '顶部统计']
+        : api.path.includes('/alarm/') ? ['指挥页', '事件队列', '人员通知']
+          : api.path.includes('/camera') || api.path.includes('/stream') ? ['视频画面', '配置页']
+            : api.path.includes('/device') ? ['物联系统联动']
+              : ['AI 研判'],
+      description: `${api.name}，来源于 community-kunyun Swagger。`,
+      requestExample: buildRequestExample(api),
+      responseExample: { code: 200, msg: '操作成功', data: {} },
+      statusCodes: [
+        { code: 200, meaning: '请求成功' },
+        { code: 401, meaning: '需要登录令牌' },
+        { code: 500, meaning: '后端处理失败' },
+      ],
+      fields: String(api.payload || '')
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .map((name) => ({ name, type: name.endsWith('ids') || name.endsWith('uuids') || name === 'actions' || name === 'receivers' ? 'array' : 'string', required: false, note: '按后端接口传入' })),
+    })),
+  };
+}
+
+function buildRequestExample(api) {
+  if (api.id === 'kunyun-alarm-archive') return { alarm_ids: [1001], alarm_uuids: ['alarm-uuid'], archive_status: '1', remark: '前端确认归档' };
+  if (api.id === 'kunyun-alarm-handle') return { alarm_ids: [1001], alarm_uuids: ['alarm-uuid'], handle_status: '1', remark: '前端确认处理' };
+  if (api.id === 'kunyun-device-trigger') return { device_id: 'DOOR-A01', action: 'lock' };
+  if (api.id === 'kunyun-alarm-receive') return { camera_id: 1001, camera_name: 'A区入口', alarm_type: 'person_intrusion', degree: 'warning', timestamp: '2026-09-04 10:00:00' };
+  if (api.method === 'GET') return {};
+  return { remark: '前端原型调用' };
+}
+
+export function adaptKunyunAlarmsToEvents(rows = []) {
+  return rows.map((row, index) => {
+    const id = String(pickFirst(row.alarmUuid, row.alarm_uuid, row.alarmUuid, row.snowflakeId, row.id, `ALARM-${index + 1}`));
+    const degree = String(pickFirst(row.degree, row.alarmLevel, row.severity, row.handleStatus, '')).toLowerCase();
+    const severity = severityRank[degree] >= 3 ? 'critical' : severityRank[degree] >= 2 ? 'warning' : 'normal';
+    const confidence = Number(pickFirst(row.confidence, row.score, row.algorithmScore, row.onlineStatus === 1 ? 95 : 86, 86));
+    const handled = ['1', 'done', 'handled', '已处理'].includes(String(pickFirst(row.handleStatus, row.handle_status, '')).toLowerCase());
+    const archived = ['1', 'done', 'archived', '已归档'].includes(String(pickFirst(row.archiveStatus, row.archive_status, '')).toLowerCase());
+    const stage = archived ? 4 : handled ? 3 : severity === 'normal' ? 1 : 2;
+    const progress = archived ? 100 : handled ? 80 : severity === 'normal' ? 45 : 60;
+    const cameraId = String(pickFirst(row.cameraId, row.camera_id, row.cameraUuid, row.camera_uuid, row.channelId, `CAM-${index + 1}`));
+    return {
+      id,
+      backendId: row.id,
+      alarmUuid: String(pickFirst(row.alarmUuid, row.alarm_uuid, id)),
+      title: pickFirst(row.alarmType, row.alarm_type, row.algorithmName, row.algorithm_name, row.videoName, '后端告警事件'),
+      zone: pickFirst(row.cameraGroup, row.camera_group, row.deptName, '未分区'),
+      location: pickFirst(row.cameraName, row.camera_name, row.videoName, row.gps, '后端告警位置'),
+      cameraId,
+      time: String(pickFirst(row.alarmTime, row.alarm_time, row.timestamp, row.createTime, '--:--:--')).slice(11, 19) || '--:--:--',
+      severity,
+      severityText: archived ? '已归档' : handled ? '已处理' : severity === 'critical' ? '严重' : severity === 'warning' ? '警告' : '一般',
+      confidence: Number.isFinite(confidence) ? confidence : 86,
+      progress,
+      stage,
+      aiDecision: `已从后端告警接口读取：${pickFirst(row.algorithmName, row.algorithm_name, row.alarmType, row.alarm_type, '安防事件')}。可继续处理、通知、联动或归档。`,
+      recommendations: ['查看告警详情', '通知相关人员', '触发设备联动', '处理并归档告警'],
+      detections: [
+        { label: pickFirst(row.algorithmName, row.algorithm_name, 'AI 告警'), confidence: Number.isFinite(confidence) ? confidence : 86 },
+        { label: '摄像头在线状态', confidence: row.onlineStatus === 0 ? 30 : 92 },
+        { label: '通知状态', confidence: ['1', 'done'].includes(String(row.notifyStatus ?? row.notify_status)) ? 100 : 55 },
+      ],
+      linkage: [
+        { name: '告警处理接口', target: id, status: handled ? 'done' : 'pending', label: handled ? '已处理' : '待处理' },
+        { name: '归档接口', target: id, status: archived ? 'done' : 'pending', label: archived ? '已归档' : '待归档' },
+      ],
+      contacts: [
+        { name: '值班人员', role: '告警接收人', channel: '后端通知', status: row.notifyStatus ? 'running' : 'pending', label: row.notifyStatus ? '已同步' : '待通知' },
+      ],
+      raw: row,
+    };
+  });
+}
+
+export function adaptKunyunCamerasToStreams(rows = []) {
+  return rows.map((row, index) => {
+    const id = String(pickFirst(row.cameraId, row.camera_id, row.cameraUuid, row.camera_uuid, `CAM-${index + 1}`));
+    const playUrl = pickFirst(row.proxyStream, row.proxy_stream, row.proxyRtmpStream, row.proxy_rtmp_stream, row.streamUrl, row.stream_url, '');
+    return normalizeStreamRecord({
+      id,
+      name: pickFirst(row.cameraName, row.camera_name, row.videoName, `摄像头 ${id}`),
+      zone: pickFirst(row.groupUuid, row.group_uuid, row.sourceUuid, row.source_uuid, '后端接入'),
+      protocol: 'RTSP',
+      endpoint: pickFirst(row.streamUrl, row.stream_url, playUrl),
+      playProtocol: String(playUrl).includes('.flv') ? 'flv' : 'hls',
+      playUrl,
+      snapshotUrl: pickFirst(row.snapUrl, row.snap_url, ''),
+      status: Number(row.onlineStatus ?? row.online_status) === 0 ? 'offline' : 'online',
+      priority: index + 1,
+      enabled: String(row.status ?? '0') !== '1',
+      latency: '后端返回',
+      bitrate: '自适应',
+      resolution: row.imageWidth && row.imageHeight ? `${row.imageWidth}x${row.imageHeight}` : '1920x1080',
+      authProfile: 'kunyun-backend',
+      raw: row,
+    });
+  });
+}
+
+function normalizeStreamRecord(stream) {
+  const protocol = stream.protocol || 'RTSP';
+  return {
+    playProtocol: protocol === 'HLS' ? 'hls' : protocol === 'FLV' ? 'flv' : protocol === 'WebRTC' ? 'webrtc' : stream.playProtocol || 'hls',
+    playUrl: protocol === 'HLS' || protocol === 'WebRTC' ? stream.endpoint : stream.playUrl || '',
+    ...stream,
+  };
+}
+
 export function getLiveStreams(streams = videoStreams) {
   return streams.filter((stream) => stream.enabled).toSorted((a, b) => a.priority - b.priority);
 }
